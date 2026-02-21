@@ -1,0 +1,2438 @@
+# Solana Stablecoin Standard — 完整技术文档 v2
+
+---
+
+任务网址：https://superteam.fun/earn/listing/build-the-solana-stablecoin-standard-bounty?utm_source=telegram-notification&utm_medium=telegram&utm_campaign=listing_notification
+
+参考仓库：https://github.com/solanabr/solana-vault-standard
+
+
+
+# 第一部分：赏金题目深度分析
+
+## 1.1 赏金本质拆解
+
+这个赏金本质上要求我们构建 **一个完整的稳定币基础设施**，而不仅仅是一个智能合约。
+
+### 赏金方到底想要什么？
+
+```
+赏金方是 Superteam Brazil。
+他们之前已经做了一个项目叫 Solana Vault Standard (SVS)。
+现在他们想用同样的方式做稳定币标准。
+
+他们的目标：
+  让 Solana 上发行稳定币变得像以太坊上用 OpenZeppelin 一样简单。
+  
+  以太坊的模式：
+    OpenZeppelin（SDK库）→ ERC-20（标准合约）→ 一键部署
+  
+  我们要做的：
+    @stbr/sss-token（SDK库）→ SSS-1/SSS-2（标准预设）→ 一键部署
+```
+
+### 评分权重深度分析
+
+```
+┌────────────────────────────────┬────────┬───────────────────────────────────┐
+│ 评分维度                        │ 权重   │ 什么意思 / 如何得高分               │
+├────────────────────────────────┼────────┼───────────────────────────────────┤
+│ SDK Design & Modularity        │  20%   │ 三层分离要干净：                    │
+│                                │        │ Layer 1 不依赖 Layer 2             │
+│                                │        │ Layer 2 模块可独立测试              │
+│                                │        │ Layer 3 预设 = Layer1 + Layer2 组合 │
+│                                │        │ 支持自定义配置（不只是预设）         │
+├────────────────────────────────┼────────┼───────────────────────────────────┤
+│ Completeness                   │  20%   │ SSS-1 + SSS-2 + SDK + CLI +       │
+│                                │        │ 后端服务 + 测试 + 文档 + Devnet    │
+│                                │        │ 全部功能可运行，不是半成品           │
+├────────────────────────────────┼────────┼───────────────────────────────────┤
+│ Code Quality                   │  20%   │ Anchor 最佳实践                    │
+│                                │        │ 错误处理完整                        │
+│                                │        │ 代码注释充分                        │
+│                                │        │ 遵循 SVS 的代码组织模式             │
+├────────────────────────────────┼────────┼───────────────────────────────────┤
+│ Authority                      │  20%   │ 你作为 Solana/Web3 工程师的专业度   │
+│                                │        │ 代码是否体现深入理解                 │
+│                                │        │ Token-2022 扩展使用是否正确         │
+│                                │        │ PDA 设计是否合理                    │
+├────────────────────────────────┼────────┼───────────────────────────────────┤
+│ Security                       │  15%   │ 角色权限不能被绕过                  │
+│                                │        │ Feature gating 不能出错             │
+│                                │        │ 没有重入/溢出等漏洞                 │
+│                                │        │ 审计日志完整                        │
+├────────────────────────────────┼────────┼───────────────────────────────────┤
+│ Usability & Documentation      │   5%   │ CLI 命令直觉化                     │
+│                                │        │ SDK API 设计符合人体工程学           │
+│                                │        │ 文档 8 份全部要有                   │
+├────────────────────────────────┼────────┼───────────────────────────────────┤
+│ Bonus                          │ ≤50%   │ SSS-3 / Oracle / TUI / Frontend   │
+│                                │        │ 做了几个得几个的分                   │
+│                                │        │ 质量比数量重要                      │
+└────────────────────────────────┴────────┴───────────────────────────────────┘
+```
+
+### 关键洞察——什么最影响得奖
+
+```
+第一名 vs 第二名的差距通常在于：
+
+1. "Authority" 占 20%——这不是看你写了多少代码，
+   而是看你的代码是否体现了对 Solana 底层的深入理解。
+   
+   举例：
+   ❌ 普通实现：把黑名单存在一个 Vec<Pubkey> 里
+   ✅ 高级实现：每个黑名单条目用独立 PDA，
+              因为 Transfer Hook 的 ExtraAccountMeta 需要通过 seeds 派生地址
+   
+   评委一看就知道你理解 Solana 的账户模型。
+
+2. "SDK Design" 占 20%——这要求真正的模块化，不是口头说说。
+   
+   举例：
+   ❌ 普通实现：一个大文件里所有功能混在一起
+   ✅ 高级实现：合规模块可以完全不导入就能编译运行 SSS-1
+   
+3. 完整性 20% 意味着：交一个完美的链上程序但没有 CLI = 丢分。
+   宁可每个模块做到 85%，也不要一个模块 100% 但缺了别的。
+```
+
+### 从参考项目 SVS 学到的模式
+
+```
+赏金明确说了："Reference for Quality & Structure: Solana Vault Standard"
+
+我研究了 SVS 仓库，提炼出必须遵循的模式：
+
+1. 仓库结构：monorepo，programs/ + sdk/ + cli/ + tests/ + docs/
+2. 程序结构：Anchor，指令按文件分离（不是一个大 lib.rs）
+3. 测试结构：unit/ 和 integration/ 分离
+4. 文档结构：每个标准一个独立 .md 文件
+5. SDK 风格：主类 + 子模块，Builder 模式
+6. 命名约定：snake_case 指令，camelCase TypeScript
+```
+
+### 赏金的隐含要求
+
+```
+题目里没明说但评委一定会看的：
+
+1. PR 质量
+   "Submit PRs to github.com/solanabr/solana-stablecoin-standard"
+   → 需要 fork 他们的仓库，PR 描述要清晰
+   → "Iterate on feedback — PRs that evolve score higher"
+   → 说明他们会给反馈，你要响应并改进
+
+2. Devnet 部署证明
+   "Devnet deployment proof (Program ID + example transactions)"
+   → 不是说"能部署"，是要给出具体的 Program ID 和交易哈希
+   → 评委会去 Solana Explorer 验证
+
+3. Docker 可运行
+   "Docker setup for backend (docker compose up)"
+   → 评委会真的跑 docker compose up 来测试
+   → 必须一次成功，不能有缺少依赖的问题
+
+4. MIT 许可证
+   → 代码里需要有 LICENSE 文件
+```
+
+---
+
+## 1.2 竞争分析与差异化策略
+
+```
+这是一个 $5,000 总奖池的赏金，前三名都有奖。
+预计会有 5-15 个团队参与。
+
+大多数参与者可能会：
+  ✅ 写出能工作的链上程序
+  ✅ 写基本的 TypeScript SDK
+  ❌ CLI 做得粗糙或缺失
+  ❌ 后端服务敷衍或缺失
+  ❌ 测试不完整
+  ❌ 文档不全
+
+我的差异化策略：
+  1. 链上程序要完美（Token-2022 扩展使用正确无误）
+  2. Transfer Hook 的 ExtraAccountMeta 实现要完全正确（这是技术难点）
+  3. CLI 做到生产级质量（帮助文本、错误提示、进度显示）
+  4. 至少完成 1 个 Bonus 功能（TUI 最省时间但视觉冲击力最强）
+  5. 文档要参考 SVS 的格式，专业且完整
+```
+
+---
+
+# 第二部分：完整技术规格与验收标准
+
+## 2.1 交付物总览与验收矩阵
+
+```
+┌────┬──────────────────────┬──────────┬──────────────────────────────────────┐
+│ #  │ 交付物                │ 优先级   │ 验收标准（必须全部满足才算完成）         │
+├────┼──────────────────────┼──────────┼──────────────────────────────────────┤
+│ D1 │ 链上程序 core         │ P0       │ 见 §2.2                              │
+│ D2 │ 链上程序 hook         │ P0       │ 见 §2.3                              │
+│ D3 │ TypeScript SDK        │ P0       │ 见 §2.4                              │
+│ D4 │ Admin CLI             │ P0       │ 见 §2.5                              │
+│ D5 │ 后端服务              │ P1       │ 见 §2.6                              │
+│ D6 │ 测试套件              │ P0       │ 见 §2.7                              │
+│ D7 │ 文档（8份）           │ P1       │ 见 §2.8                              │
+│ D8 │ Devnet 部署           │ P0       │ 见 §2.9                              │
+│ D9 │ Docker 配置           │ P1       │ 见 §2.10                             │
+│ B1 │ SSS-3 隐私稳定币      │ Bonus    │ 见 §2.11                             │
+│ B2 │ Oracle 集成模块       │ Bonus    │ 见 §2.12                             │
+│ B3 │ Admin TUI             │ Bonus    │ 见 §2.13                             │
+│ B4 │ 示例前端              │ Bonus    │ 见 §2.14                             │
+└────┴──────────────────────┴──────────┴──────────────────────────────────────┘
+```
+
+---
+
+## 2.2 D1：链上程序 stablecoin-core — 详细规格
+
+### 2.2.1 程序身份
+
+```
+程序名称：stablecoin_core
+框架：Anchor (latest stable)
+Token 标准：Token-2022 (spl-token-2022)
+形态：单一可配置程序（SSS-1/SSS-2 通过初始化参数切换）
+部署网络：Devnet（提交时）、可部署到 Mainnet（代码就绪）
+```
+
+### 2.2.2 账户结构（PDA 设计）
+
+#### StablecoinConfig — 核心配置账户
+
+```
+用途：存储一个稳定币实例的所有配置和状态
+数量：每个稳定币一个
+生命周期：initialize 时创建，与稳定币同生命周期
+
+PDA Seeds: ["stablecoin", mint_pubkey.as_ref()]
+空间计算：8(discriminator) + 32(authority) + 32(mint) + 
+          4+32(name) + 4+10(symbol) + 4+200(uri) + 
+          1(decimals) + 1(is_paused) + 8(total_minted) + 
+          8(total_burned) + 8(audit_counter) +
+          1+1+1+1(feature_flags) + 
+          1+32(transfer_hook_program option) + 1(bump)
+          = ~380 bytes
+
+字段说明：
+┌──────────────────────────┬──────────┬───────────────────────────────────┐
+│ 字段                      │ 类型     │ 说明                               │
+├──────────────────────────┼──────────┼───────────────────────────────────┤
+│ authority                 │ Pubkey   │ Master Authority 的地址            │
+│ mint                      │ Pubkey   │ 对应的 Token-2022 Mint 地址        │
+│ name                      │ String   │ 代币名称，max 32 chars             │
+│ symbol                    │ String   │ 代币符号，max 10 chars             │
+│ uri                       │ String   │ 元数据 URI，max 200 chars          │
+│ decimals                  │ u8       │ 小数精度，通常 6 或 9               │
+│ is_paused                 │ bool     │ 全局暂停标志                       │
+│ total_minted              │ u64      │ 历史总铸造量                       │
+│ total_burned              │ u64      │ 历史总销毁量                       │
+│ audit_counter             │ u64      │ 审计日志计数器                     │
+│ features.permanent_delegate│ bool    │ 是否启用永久代理                   │
+│ features.transfer_hook     │ bool    │ 是否启用转账钩子                   │
+│ features.confidential      │ bool    │ 是否启用机密转账                   │
+│ features.default_frozen    │ bool    │ 新账户是否默认冻结                 │
+│ transfer_hook_program      │ Option  │ Hook 程序地址（SSS-2 时填入）      │
+│ bump                       │ u8      │ PDA bump seed                     │
+└──────────────────────────┴──────────┴───────────────────────────────────┘
+
+不可变字段（initialize 后不能改）：
+  mint, decimals, features.*, transfer_hook_program
+
+可变字段：
+  authority（通过 transfer_authority）
+  is_paused（通过 pause/unpause）
+  total_minted, total_burned（通过 mint/burn 自动更新）
+  audit_counter（每次操作自动递增）
+```
+
+#### RoleAccount — 角色账户
+
+```
+用途：记录某个地址在某个稳定币上的角色和配额
+数量：每个（稳定币, 用户）组合一个
+生命周期：update_roles 时创建或更新
+
+PDA Seeds: ["role", config_pubkey.as_ref(), user_pubkey.as_ref()]
+空间：8 + 32 + 32 + 1 + 1+8 + 8 + 8 + 1 = ~100 bytes
+
+字段说明：
+┌──────────────────────┬──────────┬──────────────────────────────────────┐
+│ 字段                  │ 类型     │ 说明                                  │
+├──────────────────────┼──────────┼──────────────────────────────────────┤
+│ config                │ Pubkey   │ 所属的 StablecoinConfig PDA 地址      │
+│ authority             │ Pubkey   │ 此角色所属的用户地址                   │
+│ roles                 │ u8       │ 角色位掩码                            │
+│ mint_quota            │ Option   │ 铸币额度上限（仅 MINTER 适用）        │
+│ minted_current_window │ u64      │ 当前时间窗口已铸造量                   │
+│ window_start          │ i64      │ 当前时间窗口起始时间戳                 │
+│ bump                  │ u8       │ PDA bump seed                        │
+└──────────────────────┴──────────┴──────────────────────────────────────┘
+
+角色位掩码定义：
+  bit 0 (0x01): MASTER_AUTHORITY  → 最高权限
+  bit 1 (0x02): MINTER            → 铸造权限
+  bit 2 (0x04): BURNER            → 销毁权限
+  bit 3 (0x08): FREEZER           → 冻结/解冻权限
+  bit 4 (0x10): PAUSER            → 暂停/恢复权限
+  bit 5 (0x20): BLACKLISTER       → 黑名单管理权限（SSS-2）
+  bit 6 (0x40): SEIZER            → 资产没收权限（SSS-2）
+
+一个用户可以同时拥有多个角色：
+  roles = 0x06 表示同时是 MINTER + BURNER
+```
+
+#### BlacklistEntry — 黑名单条目（SSS-2）
+
+```
+用途：标记某个地址被拉黑
+数量：每个（稳定币, 被拉黑地址）组合一个
+生命周期：add_to_blacklist 创建，remove_from_blacklist 时标记 is_active=false
+
+PDA Seeds: ["blacklist", config_pubkey.as_ref(), wallet_pubkey.as_ref()]
+空间：8 + 32 + 32 + 8 + 32 + 4+128 + 1 + 1 = ~250 bytes
+
+字段说明：
+┌──────────────────────┬──────────┬──────────────────────────────────────┐
+│ 字段                  │ 类型     │ 说明                                  │
+├──────────────────────┼──────────┼──────────────────────────────────────┤
+│ config                │ Pubkey   │ 所属的 StablecoinConfig PDA 地址      │
+│ wallet                │ Pubkey   │ 被拉黑的钱包地址                      │
+│ blacklisted_at        │ i64      │ 拉黑时间戳                            │
+│ blacklisted_by        │ Pubkey   │ 执行拉黑的 Blacklister 地址           │
+│ reason                │ String   │ 拉黑原因，max 128 chars               │
+│ is_active             │ bool     │ 是否生效                              │
+│ bump                  │ u8       │ PDA bump seed                        │
+└──────────────────────┴──────────┴──────────────────────────────────────┘
+
+设计决策——为什么 remove 不销毁 PDA 而是设 is_active=false？
+  1. 保留历史记录（审计需要）
+  2. 如果销毁 PDA，再次拉黑时需要重新分配租金
+  3. Transfer Hook 检查 is_active 即可，PDA 存在但 inactive = 不拦截
+```
+
+### 2.2.3 指令规格（全部 13 条）
+
+#### 指令 1：initialize
+
+```
+功能：创建一个新的稳定币实例
+谁能调用：任何人（调用者成为 MASTER_AUTHORITY）
+
+输入参数：
+  name: String (max 32)          — 代币名称
+  symbol: String (max 10)        — 代币符号
+  uri: String (max 200)          — 元数据 URI
+  decimals: u8                   — 小数精度
+  enable_permanent_delegate: bool — 是否启用永久代理
+  enable_transfer_hook: bool     — 是否启用转账钩子
+  default_account_frozen: bool   — 新账户是否默认冻结
+  transfer_hook_program: Option<Pubkey> — Hook 程序地址（启用转账钩子时提供）
+
+需要的账户：
+  [signer, mut]    authority         — 调用者，付款人
+  [mut]            mint              — 新创建的 Mint 账户（Keypair）
+  [mut]            config            — StablecoinConfig PDA（程序创建）
+  [mut]            role_account      — 调用者的 RoleAccount PDA（程序创建）
+  [mut]            extra_metas_account — ExtraAccountMetaList（仅 SSS-2）
+  []               token_2022_program — Token-2022 程序
+  []               system_program    — System 程序
+  []               rent              — Rent sysvar
+
+执行步骤：
+  1. 计算 Mint 账户所需空间（基础 + 所有启用的扩展）
+  2. 创建 Mint 账户（通过 CPI 到 System Program）
+  3. 初始化扩展：
+     a. MintCloseAuthority（close_authority = config PDA）
+     b. MetadataPointer（metadata_address = mint 自身）
+     c. 如果 enable_permanent_delegate:
+        PermanentDelegate（delegate = config PDA）
+     d. 如果 enable_transfer_hook:
+        TransferHook（authority = config PDA, program_id = hook 程序）
+     e. 如果 default_account_frozen:
+        DefaultAccountState（state = Frozen）
+  4. 初始化 Mint（mint_authority = config PDA, freeze_authority = config PDA）
+  5. 初始化 TokenMetadata（name, symbol, uri）
+  6. 创建 StablecoinConfig PDA，写入所有配置
+  7. 创建调用者的 RoleAccount PDA，设置 roles = MASTER_AUTHORITY
+  8. 如果 enable_transfer_hook:
+     初始化 ExtraAccountMetaList（见 §2.3）
+  9. 发出 StablecoinInitialized 事件
+
+验收标准：
+  □ Devnet 上成功创建 SSS-1 配置的稳定币
+  □ Devnet 上成功创建 SSS-2 配置的稳定币
+  □ Mint 账户包含正确的扩展
+  □ Config PDA 数据正确
+  □ 调用者获得 MASTER_AUTHORITY 角色
+  □ 事件正确发出
+  □ SSS-2 的 ExtraAccountMetaList 正确初始化
+```
+
+#### 指令 2：mint
+
+```
+功能：铸造新代币到指定地址
+谁能调用：MASTER_AUTHORITY 或 MINTER 角色
+
+输入参数：
+  amount: u64 — 铸造数量（含精度，例如 1 DREX = 1_000_000）
+
+需要的账户：
+  [signer]      minter           — 铸造者
+  [mut]         config           — StablecoinConfig PDA
+  []            role_account     — 铸造者的 RoleAccount PDA
+  [mut]         mint             — Mint 账户
+  [mut]         recipient_ata    — 收款方的 Associated Token Account
+  []            recipient        — 收款方地址
+  []            token_2022_program
+  []            associated_token_program
+  []            system_program
+
+执行步骤：
+  1. 验证 role_account 属于 minter 且有 MINTER 或 MASTER 角色
+  2. 验证 config.is_paused == false
+  3. 如果 role_account.mint_quota.is_some()：
+     a. 检查时间窗口是否过期（如果过期，重置 minted_current_window）
+     b. 验证 minted_current_window + amount <= mint_quota
+     c. 更新 minted_current_window
+     d. 时间窗口默认 24 小时（常量，可后续配置）
+  4. 如果 recipient_ata 不存在，创建它
+  5. CPI: spl_token_2022::instruction::mint_to
+     authority = config PDA (PDA signs)
+  6. 更新 config.total_minted += amount
+  7. 发出 TokensMinted 事件
+
+验收标准：
+  □ MINTER 角色可以铸造
+  □ MASTER_AUTHORITY 可以铸造
+  □ 非 MINTER 调用失败并返回 Unauthorized
+  □ 系统暂停时调用失败并返回 SystemPaused
+  □ 超出配额时调用失败并返回 QuotaExceeded
+  □ 配额时间窗口过期后自动重置
+  □ total_minted 正确更新
+  □ 收款方余额正确增加
+  □ 收款方 ATA 不存在时自动创建
+  □ 事件正确发出
+```
+
+#### 指令 3：burn
+
+```
+功能：销毁调用者持有的代币
+谁能调用：MASTER_AUTHORITY 或 BURNER 角色
+
+输入参数：
+  amount: u64
+
+需要的账户：
+  [signer]      burner
+  [mut]         config
+  []            role_account
+  [mut]         mint
+  [mut]         burner_ata      — 销毁者自己的 Token Account
+
+执行步骤：
+  1. 验证角色
+  2. 验证 config.is_paused == false
+  3. 验证 burner_ata.amount >= amount
+  4. CPI: spl_token_2022::instruction::burn
+  5. 更新 config.total_burned += amount
+  6. 发出 TokensBurned 事件
+
+验收标准：
+  □ 正确角色可以销毁
+  □ 余额不足时失败
+  □ 暂停时失败
+  □ total_burned 正确更新
+  □ Mint 的 supply 正确减少
+```
+
+#### 指令 4-5：freeze_account / thaw_account
+
+```
+功能：冻结或解冻某个 Token Account
+谁能调用：MASTER_AUTHORITY 或 FREEZER 角色
+
+输入参数：无（目标账户在 accounts 列表中）
+
+需要的账户：
+  [signer]      freezer
+  [mut]         config
+  []            role_account
+  []            mint
+  [mut]         target_ata       — 要冻结/解冻的 Token Account
+
+执行步骤：
+  1. 验证角色
+  2. CPI: spl_token_2022::instruction::freeze_account / thaw_account
+     authority = config PDA（config PDA 是 freeze_authority）
+  3. 发出 AccountFrozen / AccountThawed 事件
+
+验收标准：
+  □ 冻结后该账户不能发送也不能接收代币
+  □ 解冻后恢复正常
+  □ 非 FREEZER 角色无法调用
+  □ 不能冻结不属于此 mint 的 Token Account
+```
+
+#### 指令 6-7：pause / unpause
+
+```
+功能：暂停或恢复整个稳定币系统
+谁能调用：MASTER_AUTHORITY 或 PAUSER 角色
+
+输入参数：无
+
+需要的账户：
+  [signer]      pauser
+  [mut]         config
+  []            role_account
+
+执行步骤：
+  1. 验证角色
+  2. 设置 config.is_paused = true / false
+  3. 发出 SystemPaused / SystemUnpaused 事件
+
+验收标准：
+  □ 暂停后 mint、burn 都失败
+  □ 暂停后 freeze/thaw 仍然可以执行（紧急操作不受暂停影响）
+  □ 暂停后 blacklist 操作仍然可以执行（安全操作不受暂停影响）
+  □ unpause 后恢复正常
+  □ 已经暂停时再次 pause 不报错（幂等）
+  □ 已经恢复时再次 unpause 不报错（幂等）
+```
+
+#### 指令 8-9：update_roles / update_minter
+
+```
+功能：
+  update_roles — 给某地址授予或撤销角色
+  update_minter — 更新某个 Minter 的配额
+
+谁能调用：仅 MASTER_AUTHORITY
+
+update_roles 输入参数：
+  target: Pubkey         — 目标用户地址
+  roles: u8              — 新的角色位掩码
+  mint_quota: Option<u64>— 铸币配额（仅当设置 MINTER 时）
+
+update_minter 输入参数：
+  new_quota: u64         — 新的铸币配额
+
+执行步骤（update_roles）：
+  1. 验证调用者是 MASTER_AUTHORITY
+  2. 如果目标的 RoleAccount PDA 不存在，创建它
+  3. 设置 roles 位掩码
+  4. 如果包含 MINTER 且提供了 mint_quota，设置配额
+  5. 如果包含 BLACKLISTER 或 SEIZER，验证 config 启用了对应功能
+  6. 发出 RoleUpdated 事件
+
+验收标准：
+  □ 只有 MASTER 可以调用
+  □ 可以一次授予多个角色
+  □ 撤销角色（设 roles=0）后用户无法再执行对应操作
+  □ 给 SSS-1 稳定币设置 BLACKLISTER 角色时失败（功能未启用）
+  □ 铸币配额设置后生效
+```
+
+#### 指令 10：transfer_authority
+
+```
+功能：将 MASTER_AUTHORITY 转移给新地址
+谁能调用：仅当前 MASTER_AUTHORITY
+
+输入参数：无（新 authority 在 accounts 中）
+
+需要的账户：
+  [signer]      current_authority
+  [mut]         config
+  []            current_role_account
+  [mut]         new_role_account      — 新 authority 的 RoleAccount PDA
+  []            new_authority         — 新 authority 地址
+
+执行步骤：
+  1. 验证调用者是 MASTER_AUTHORITY
+  2. 创建新 authority 的 RoleAccount（如不存在）
+  3. 设置新 RoleAccount.roles = MASTER_AUTHORITY
+  4. 移除旧 RoleAccount 的 MASTER_AUTHORITY 位
+  5. 更新 config.authority = new_authority
+  6. 发出 AuthorityTransferred 事件
+
+验收标准：
+  □ 旧 authority 失去所有特殊权限
+  □ 新 authority 获得 MASTER_AUTHORITY
+  □ config.authority 更新为新地址
+  □ 旧 authority 无法再调用任何 MASTER 专属操作
+```
+
+#### 指令 11：add_to_blacklist（SSS-2 专属）
+
+```
+功能：将一个地址加入黑名单
+谁能调用：MASTER_AUTHORITY 或 BLACKLISTER 角色
+
+输入参数：
+  wallet: Pubkey         — 要拉黑的地址
+  reason: String (max 128) — 拉黑原因
+
+需要的账户：
+  [signer, mut]  blacklister
+  [mut]          config
+  []             role_account
+  [mut]          blacklist_entry   — BlacklistEntry PDA（程序创建/更新）
+
+执行步骤：
+  1. Feature gate: require!(config.features.transfer_hook == true)
+  2. 验证角色
+  3. 如果 BlacklistEntry PDA 不存在：创建并设置 is_active = true
+  4. 如果 PDA 存在但 is_active == false：设置 is_active = true，更新信息
+  5. 如果 PDA 存在且 is_active == true：返回 AlreadyBlacklisted 错误
+  6. 发出 BlacklistAdded 事件
+
+验收标准：
+  □ SSS-1 稳定币调用时返回 FeatureNotEnabled
+  □ SSS-2 稳定币正确创建 BlacklistEntry PDA
+  □ 被拉黑地址的后续转账被 Transfer Hook 拦截
+  □ 重复拉黑返回 AlreadyBlacklisted
+  □ 之前被移除的地址可以重新拉黑
+  □ reason 字段正确记录
+```
+
+#### 指令 12：remove_from_blacklist（SSS-2 专属）
+
+```
+功能：将一个地址从黑名单移除
+谁能调用：MASTER_AUTHORITY 或 BLACKLISTER 角色
+
+输入参数：无
+
+需要的账户：
+  [signer]       blacklister
+  [mut]          config
+  []             role_account
+  [mut]          blacklist_entry
+
+执行步骤：
+  1. Feature gate
+  2. 验证角色
+  3. 验证 blacklist_entry.is_active == true
+  4. 设置 is_active = false
+  5. 发出 BlacklistRemoved 事件
+
+验收标准：
+  □ 移除后该地址可以正常转账
+  □ 移除不存在的黑名单条目返回 NotBlacklisted
+  □ BlacklistEntry PDA 保留（不销毁），is_active = false
+```
+
+#### 指令 13：seize（SSS-2 专属）
+
+```
+功能：没收某个账户的所有代币到指定国库地址
+谁能调用：MASTER_AUTHORITY 或 SEIZER 角色
+
+输入参数：无
+
+需要的账户：
+  [signer]       seizer
+  [mut]          config
+  []             role_account
+  []             mint
+  [mut]          target_ata         — 被没收者的 Token Account
+  [mut]          treasury_ata       — 国库的 Token Account
+  []             blacklist_entry    — 被没收者的 BlacklistEntry PDA
+  []             token_2022_program
+
+执行步骤（4 重验证）：
+  1. 验证调用者有 SEIZER 角色 ← 第 1 重
+  2. Feature gate: require!(config.features.permanent_delegate) ← 第 2 重
+  3. 验证 blacklist_entry.is_active == true ← 第 3 重
+  4. 验证 target_ata 已冻结（state == Frozen）← 第 4 重
+  5. 读取 target_ata.amount
+  6. CPI: spl_token_2022::instruction::transfer_checked
+     amount = target_ata.amount（全部余额）
+     authority = config PDA（作为 Permanent Delegate 签名）
+  7. 更新 config.audit_counter
+  8. 发出 TokensSeized 事件（包含金额、来源、目标、执行者）
+
+验收标准：
+  □ 4 重验证全部通过时成功没收
+  □ 缺少 SEIZER 角色 → Unauthorized
+  □ permanent_delegate 未启用 → FeatureNotEnabled
+  □ 目标不在黑名单 → NotBlacklisted
+  □ 目标账户未冻结 → AccountNotFrozen
+  □ 没收后目标余额 = 0
+  □ 没收后国库余额 += 没收金额
+  □ 事件记录完整的审计信息
+```
+
+### 2.2.4 事件定义
+
+```
+所有事件必须通过 Anchor 的 #[event] 宏定义：
+
+StablecoinInitialized {
+    config: Pubkey,
+    mint: Pubkey,
+    authority: Pubkey,
+    name: String,
+    symbol: String,
+    preset: String,          // "SSS-1", "SSS-2", "custom"
+    timestamp: i64,
+}
+
+TokensMinted {
+    config: Pubkey,
+    mint: Pubkey,
+    recipient: Pubkey,
+    amount: u64,
+    minter: Pubkey,
+    new_total_supply: u64,
+    timestamp: i64,
+}
+
+TokensBurned {
+    config: Pubkey,
+    mint: Pubkey,
+    burner: Pubkey,
+    amount: u64,
+    new_total_supply: u64,
+    timestamp: i64,
+}
+
+AccountFrozen {
+    config: Pubkey,
+    target_account: Pubkey,
+    frozen_by: Pubkey,
+    timestamp: i64,
+}
+
+AccountThawed {
+    config: Pubkey,
+    target_account: Pubkey,
+    thawed_by: Pubkey,
+    timestamp: i64,
+}
+
+SystemPaused {
+    config: Pubkey,
+    paused_by: Pubkey,
+    timestamp: i64,
+}
+
+SystemUnpaused {
+    config: Pubkey,
+    unpaused_by: Pubkey,
+    timestamp: i64,
+}
+
+RoleUpdated {
+    config: Pubkey,
+    target: Pubkey,
+    new_roles: u8,
+    updated_by: Pubkey,
+    timestamp: i64,
+}
+
+AuthorityTransferred {
+    config: Pubkey,
+    old_authority: Pubkey,
+    new_authority: Pubkey,
+    timestamp: i64,
+}
+
+BlacklistAdded {
+    config: Pubkey,
+    wallet: Pubkey,
+    reason: String,
+    blacklisted_by: Pubkey,
+    timestamp: i64,
+}
+
+BlacklistRemoved {
+    config: Pubkey,
+    wallet: Pubkey,
+    removed_by: Pubkey,
+    timestamp: i64,
+}
+
+TokensSeized {
+    config: Pubkey,
+    from_account: Pubkey,
+    to_account: Pubkey,
+    amount: u64,
+    seized_by: Pubkey,
+    timestamp: i64,
+}
+
+验收标准：
+  □ 每个指令执行成功后都发出对应事件
+  □ 事件包含足够的信息用于审计重建
+  □ timestamp 使用 Clock::get().unix_timestamp
+  □ 后端 Event Indexer 能正确解析所有事件
+```
+
+### 2.2.5 错误码定义
+
+```
+#[error_code]
+pub enum StablecoinError {
+    #[msg("Caller does not have the required role")]
+    Unauthorized,                    // 6000
+
+    #[msg("This feature was not enabled during initialization")]
+    FeatureNotEnabled,               // 6001
+
+    #[msg("System is paused")]
+    SystemPaused,                    // 6002
+
+    #[msg("Minting quota exceeded for current window")]
+    QuotaExceeded,                   // 6003
+
+    #[msg("Address is already blacklisted")]
+    AlreadyBlacklisted,              // 6004
+
+    #[msg("Address is not blacklisted")]
+    NotBlacklisted,                  // 6005
+
+    #[msg("Account must be frozen before seizure")]
+    AccountNotFrozen,                // 6006
+
+    #[msg("Target must be blacklisted before seizure")]
+    TargetNotBlacklisted,            // 6007
+
+    #[msg("Name exceeds maximum length of 32 characters")]
+    NameTooLong,                     // 6008
+
+    #[msg("Symbol exceeds maximum length of 10 characters")]
+    SymbolTooLong,                   // 6009
+
+    #[msg("URI exceeds maximum length of 200 characters")]
+    UriTooLong,                      // 6010
+
+    #[msg("Reason exceeds maximum length of 128 characters")]
+    ReasonTooLong,                   // 6011
+
+    #[msg("Invalid role bitmask")]
+    InvalidRoles,                    // 6012
+
+    #[msg("Cannot transfer authority to self")]
+    SelfTransfer,                    // 6013
+
+    #[msg("Insufficient token balance")]
+    InsufficientBalance,             // 6014
+
+    #[msg("Arithmetic overflow")]
+    Overflow,                        // 6015
+
+    #[msg("Account is frozen and cannot perform this action")]
+    AccountFrozen,                   // 6016
+}
+
+验收标准：
+  □ 每个错误场景都有对应的错误码
+  □ 错误消息对人类可读
+  □ 测试覆盖每个错误路径
+```
+
+### 完工笔记 (2026-02-21)
+
+- 已创建 stablecoin-core Anchor 程序骨架（Cargo.toml、lib.rs、state/errors/events/instructions）。
+
+- 已实现 initialize / mint / burn / freeze / thaw / pause / unpause / roles / blacklist / seize 的核心逻辑与事件发射。
+
+- initialize 已补齐：Mint 扩展初始化 + TokenMetadata 初始化 + ExtraAccountMetaList CPI 初始化。
+
+- 已加入角色校验、feature gating、配额窗口（默认 24h）与溢出保护。
+
+---
+
+## 2.3 D2：链上程序 transfer-hook — 详细规格
+
+### 2.3.1 程序概述
+
+```
+这是一个独立的 Anchor 程序，实现 spl-transfer-hook-interface。
+它只做一件事：检查转账的发送方和接收方是否在黑名单中。
+
+为什么必须是独立程序：
+  Solana Token-2022 的 TransferHook 机制要求 hook 是一个独立的程序。
+  Token-2022 程序在处理 TransferChecked 指令时会 CPI 到 hook 程序。
+  一个程序不能 CPI 调用自己（会导致递归），所以必须分开。
+```
+
+### 2.3.2 ExtraAccountMetaList
+
+```
+ExtraAccountMetaList 是 Transfer Hook 的关键机制。
+它告诉 Solana 运行时："执行 hook 时，除了标准账户外，还需要传入哪些额外账户"。
+
+在我们的场景中，hook 需要：
+  1. 发送方（source owner）的 BlacklistEntry PDA
+  2. 接收方（destination owner）的 BlacklistEntry PDA
+  3. StablecoinConfig PDA（验证功能是否启用）
+
+这些额外账户通过 ExtraAccountMeta 的 seeds 机制动态派生：
+
+ExtraAccountMeta 列表 = [
+    // Core Program（固定公钥，供外部 PDA 派生引用）
+    ExtraAccountMeta {
+        discriminator: PUBKEY,
+        pubkey: stablecoin_core_program_id,
+        is_signer: false,
+        is_writable: false,
+    },
+    // StablecoinConfig PDA
+    ExtraAccountMeta {
+        discriminator: EXTERNAL_PDA,
+        seeds: [
+            Seed::Literal("stablecoin"),
+            Seed::AccountKey(mint_index),
+        ],
+        program_id: stablecoin_core_program_id,
+        is_signer: false,
+        is_writable: false,
+    },
+    // 源地址的 BlacklistEntry（owner 从 Token Account 数据中取）
+    ExtraAccountMeta {
+        discriminator: EXTERNAL_PDA,
+        seeds: [
+            Seed::Literal("blacklist"),
+            Seed::AccountKey(config_pda_index),
+            Seed::AccountData(source_token_account_index, owner_offset = 32, length = 32),
+        ],
+        program_id: stablecoin_core_program_id,
+        is_signer: false,
+        is_writable: false,
+    },
+    // 目标地址的 BlacklistEntry（owner 从 Token Account 数据中取）
+    ExtraAccountMeta {
+        discriminator: EXTERNAL_PDA,
+        seeds: [
+            Seed::Literal("blacklist"),
+            Seed::AccountKey(config_pda_index),
+            Seed::AccountData(destination_token_account_index, owner_offset = 32, length = 32),
+        ],
+        program_id: stablecoin_core_program_id,
+        is_signer: false,
+        is_writable: false,
+    },
+]
+
+ExtraAccountMetaList PDA seeds: ["extra-account-metas", mint_pubkey.as_ref()]
+存储在: transfer-hook 程序所有的 PDA 中
+初始化时机: stablecoin-core 的 initialize 指令中通过 CPI 初始化
+```
+
+### 2.3.3 Hook 执行逻辑
+
+```
+指令：execute（由 Solana 运行时自动调用，不是用户直接调用）
+
+传入的账户（按照 spl-transfer-hook-interface 规范）：
+  [0] source_token_account
+  [1] mint
+  [2] destination_token_account
+  [3] source_owner
+  [4] extra_account_metas_pda
+  [5] stablecoin_core_program   ← 我们的 extra account
+  [6] stablecoin_config         ← 我们的 extra account
+  [7] source_blacklist_entry    ← 我们的 extra account
+  [8] destination_blacklist_entry ← 我们的 extra account
+
+执行逻辑：
+  1. 验证 extra_account_metas_pda 的正确性
+  2. 反序列化 stablecoin_config
+  3. 检查 source_blacklist_entry：
+     a. 如果账户数据为空（PDA不存在 = 从未被拉黑）→ OK
+     b. 如果存在，反序列化 BlacklistEntry：
+        - is_active == true → 返回 TransferDenied 错误
+        - is_active == false → OK
+  4. 检查 destination_blacklist_entry（同上逻辑）
+  5. 两者都通过 → 返回 Ok(())（转账继续）
+
+边界情况处理：
+  • PDA 不存在（从未拉黑）：
+    Solana 会传入一个空账户（data 长度 = 0）
+    我们检查 data.len() == 0 → 视为未拉黑 → 允许转账
+    
+  • PDA 存在但 is_active == false（曾经拉黑后解除）：
+    反序列化成功，检查 is_active → false → 允许转账
+
+验收标准：
+  □ 未被拉黑的地址之间可以正常转账
+  □ 发送方被拉黑 → 转账失败
+  □ 接收方被拉黑 → 转账失败
+  □ 双方都被拉黑 → 转账失败
+  □ 拉黑后解除 → 恢复正常转账
+  □ 从未被拉黑的地址（PDA 不存在）→ 正常转账
+  □ Hook 不会阻止 Permanent Delegate 的 seize 操作
+  □ Hook 性能：单次执行不超过 50k compute units
+```
+
+### 2.3.4 两个程序的数据共享
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│                   数据共享机制                                 │
+│                                                               │
+│  stablecoin-core 程序                transfer-hook 程序       │
+│  ──────────────────                  ──────────────────      │
+│                                                               │
+│  owns (创建并管理):                  reads (只读访问):         │
+│  ├── StablecoinConfig PDA     ──────▶ 读取 feature flags     │
+│  ├── BlacklistEntry PDAs      ──────▶ 读取 is_active         │
+│  └── RoleAccount PDAs                (hook 不需要角色数据)    │
+│                                                               │
+│  两个程序共享同一套 PDA seeds：                                │
+│  BlacklistEntry = ["blacklist", config, wallet]               │
+│  StablecoinConfig = ["stablecoin", mint]                     │
+│                                                               │
+│  core 程序用自己的 program_id 创建这些 PDA                    │
+│  hook 程序用 core 的 program_id 来派生并验证这些 PDA          │
+│                                                               │
+│  安全保证：                                                   │
+│  • hook 不能修改 core 的 PDA（不同 program 的 PDA 不互通）    │
+│  • hook 只做读取检查，不写入任何状态                           │
+│  • PDA 的 owner 是 core 程序，hook 只是读取数据               │
+└──────────────────────────────────────────────────────────────┘
+```
+
+### 完工笔记 (2026-02-21)
+
+- 已创建 transfer-hook Anchor 程序骨架（Cargo.toml、lib.rs、state）。
+
+- 已实现 execute 黑名单检查逻辑（空账户放行，is_active 拒绝）。
+
+- 已加入 extra_account_metas 所属程序校验与 feature gating。
+
+- 已加入 ExtraAccountMetaList seeds 校验（含 Token Account owner offset = 32）。
+
+---
+
+## 2.4 D3：TypeScript SDK — 详细规格
+
+### 2.4.1 包信息
+
+```
+包名：@stbr/sss-token
+语言：TypeScript 5.x
+目标：ESM + CJS 双输出
+依赖：
+  @solana/web3.js
+  @coral-xyz/anchor
+  @solana/spl-token (token-2022 相关工具)
+  
+发布：npm（可选，至少在 repo 中可用）
+```
+
+### 2.4.2 公开 API 规格
+
+#### 主类 SolanaStablecoin
+
+```typescript
+class SolanaStablecoin {
+  // ===== 静态工厂方法 =====
+  
+  /**
+   * 创建一个全新的稳定币
+   * 发送 initialize 交易到链上
+   * 返回一个绑定到该稳定币的 SolanaStablecoin 实例
+   */
+  static async create(
+    connection: Connection,
+    config: CreateStablecoinConfig
+  ): Promise<SolanaStablecoin>
+  
+  /**
+   * 连接到一个已经存在的稳定币
+   * 从链上读取 Config PDA 数据
+   * 返回绑定实例
+   */
+  static async fromExisting(
+    connection: Connection,
+    mint: PublicKey,
+    authority: Keypair
+  ): Promise<SolanaStablecoin>
+
+  // ===== 基础操作（Layer 1）=====
+  
+  async mint(params: MintParams): Promise<TransactionSignature>
+  async burn(params: BurnParams): Promise<TransactionSignature>
+  async freeze(tokenAccount: PublicKey): Promise<TransactionSignature>
+  async thaw(tokenAccount: PublicKey): Promise<TransactionSignature>
+  async pause(): Promise<TransactionSignature>
+  async unpause(): Promise<TransactionSignature>
+
+  // ===== 查询 =====
+  
+  async getTotalSupply(): Promise<bigint>
+  async getConfig(): Promise<StablecoinConfigData>
+  async getTokenAccountBalance(owner: PublicKey): Promise<bigint>
+  async isPaused(): Promise<boolean>
+
+  // ===== 子模块 =====
+  
+  readonly compliance: ComplianceModule   // SSS-2 时激活
+  readonly roles: RoleManager
+
+  // ===== 属性 =====
+  
+  readonly mint: PublicKey
+  readonly configPDA: PublicKey
+  readonly preset: 'SSS-1' | 'SSS-2' | 'custom'
+}
+```
+
+#### ComplianceModule
+
+```typescript
+class ComplianceModule {
+  /**
+   * 如果当前稳定币不是 SSS-2（未启用合规功能），
+   * 所有方法都会抛出 FeatureNotEnabledError
+   */
+  
+  async blacklistAdd(
+    wallet: PublicKey, 
+    reason: string
+  ): Promise<TransactionSignature>
+  
+  async blacklistRemove(
+    wallet: PublicKey
+  ): Promise<TransactionSignature>
+  
+  async blacklistCheck(
+    wallet: PublicKey
+  ): Promise<BlacklistStatus>
+  // 返回: { isBlacklisted: boolean, entry?: BlacklistEntryData }
+  
+  async seize(
+    targetTokenAccount: PublicKey,
+    treasuryTokenAccount: PublicKey
+  ): Promise<TransactionSignature>
+  
+  async getBlacklistedAddresses(): Promise<BlacklistEntryData[]>
+  
+  async getAuditLog(
+    filters?: AuditLogFilters
+  ): Promise<AuditLogEntry[]>
+}
+```
+
+#### RoleManager
+
+```typescript
+class RoleManager {
+  async grant(
+    target: PublicKey,
+    role: Role | Role[],
+    options?: { mintQuota?: bigint }
+  ): Promise<TransactionSignature>
+  
+  async revoke(
+    target: PublicKey,
+    role: Role | Role[]
+  ): Promise<TransactionSignature>
+  
+  async getRole(
+    target: PublicKey
+  ): Promise<RoleAccountData | null>
+  
+  async listAll(): Promise<RoleAccountData[]>
+  
+  async transferAuthority(
+    newAuthority: PublicKey
+  ): Promise<TransactionSignature>
+}
+```
+
+#### 类型定义
+
+```typescript
+// 预设
+enum Presets {
+  SSS_1 = 'SSS-1',
+  SSS_2 = 'SSS-2',
+}
+
+// 创建配置
+interface CreateStablecoinConfig {
+  // 使用预设
+  preset?: Presets
+  
+  // 基本信息
+  name: string
+  symbol: string
+  decimals?: number            // 默认 6
+  uri?: string                 // 默认 ""
+  authority: Keypair
+  
+  // 自定义扩展（当不使用 preset 时）
+  extensions?: {
+    permanentDelegate?: boolean
+    transferHook?: boolean
+    defaultAccountFrozen?: boolean
+    confidentialTransfer?: boolean
+  }
+}
+
+// 角色枚举
+enum Role {
+  MASTER_AUTHORITY = 0x01,
+  MINTER = 0x02,
+  BURNER = 0x04,
+  FREEZER = 0x08,
+  PAUSER = 0x10,
+  BLACKLISTER = 0x20,
+  SEIZER = 0x40,
+}
+
+// Mint 参数
+interface MintParams {
+  recipient: PublicKey
+  amount: bigint | number
+  minter?: Keypair             // 默认用 authority
+}
+
+// Burn 参数
+interface BurnParams {
+  amount: bigint | number
+  burner?: Keypair
+}
+
+验收标准：
+  □ create() 使用 Presets.SSS_1 成功创建 SSS-1 稳定币
+  □ create() 使用 Presets.SSS_2 成功创建 SSS-2 稳定币
+  □ create() 使用自定义 extensions 成功创建自定义稳定币
+  □ fromExisting() 能正确连接已有稳定币并读取配置
+  □ compliance 模块在 SSS-1 实例上调用时抛出有意义的错误
+  □ compliance 模块在 SSS-2 实例上正常工作
+  □ 所有方法都有 JSDoc 注释
+  □ 所有方法的错误都被包装为自定义 Error 类（不是原始 Anchor 错误）
+  □ SDK 支持 ESM 和 CJS 导入
+```
+
+### 2.4.3 SDK 内部架构
+
+```
+@stbr/sss-token 包内部结构：
+
+src/
+├── index.ts                  # 导出入口
+├── stablecoin.ts             # SolanaStablecoin 主类
+├── presets.ts                # Presets 定义
+├── config.ts                 # CreateStablecoinConfig 类型
+├── types.ts                  # 所有公开类型
+├── errors.ts                 # 自定义错误类
+│
+├── modules/
+│   ├── compliance.ts         # ComplianceModule 类
+│   ├── roles.ts              # RoleManager 类
+│   └── privacy.ts            # PrivacyModule（Bonus SSS-3）
+│
+├── instructions/             # 指令构建器（内部使用）
+│   ├── initialize.ts         # buildInitializeIx()
+│   ├── mint.ts               # buildMintIx()
+│   ├── burn.ts               # buildBurnIx()
+│   ├── freeze.ts             # buildFreezeIx() / buildThawIx()
+│   ├── pause.ts              # buildPauseIx() / buildUnpauseIx()
+│   ├── blacklist.ts          # buildBlacklistAddIx() / ...
+│   ├── seize.ts              # buildSeizeIx()
+│   └── roles.ts              # buildUpdateRolesIx() / ...
+│
+├── utils/
+│   ├── pda.ts                # PDA 派生辅助函数
+│   ├── token2022.ts          # Token-2022 扩展辅助
+│   ├── validation.ts         # 输入验证
+│   └── transaction.ts        # 交易构建和发送辅助
+│
+└── idl/
+    ├── stablecoin_core.json  # Anchor IDL
+    └── transfer_hook.json    # Anchor IDL
+
+每一层的职责：
+  stablecoin.ts（主类）
+    → 用户接口层，简化调用
+    → 自动处理 PDA 派生、ATA 创建
+    → 调用 instructions/ 构建指令
+    → 调用 utils/transaction.ts 发送
+
+  instructions/（指令构建器）
+    → 纯函数，输入参数 → 输出 TransactionInstruction
+    → 不发送交易，不签名
+    → 可独立使用（高级用户可能想自己组合交易）
+
+  utils/pda.ts
+    → 封装所有 PDA 派生逻辑
+    → findConfigPDA(programId, mint)
+    → findRolePDA(programId, config, authority)
+    → findBlacklistPDA(programId, config, wallet)
+    → findExtraAccountMetasPDA(hookProgramId, mint)
+
+验收标准：
+  □ 指令构建器可以独立导入使用
+  □ PDA 辅助函数结果与链上程序一致
+  □ 每个内部模块有单独的单元测试
+```
+
+### 完工笔记 (2026-02-21)
+
+- 已创建 @stbr/sss-token SDK 骨架（package.json、tsconfig、核心类与模块占位）。
+
+- 已补齐 instructions/utils 目录占位（实现待完成）。
+
+---
+
+## 2.5 D4：Admin CLI — 详细规格
+
+### 2.5.1 基本信息
+
+```
+语言：Rust
+框架：clap v4 (derive API)
+配置：支持 Solana CLI 的 ~/.config/solana/cli/config.yml
+输出：JSON 和人类可读两种格式（--output json）
+```
+
+### 2.5.2 命令规格
+
+```
+sss-token (根命令)
+│
+├── init
+│   用途：创建新的稳定币
+│   参数：
+│     --preset <sss-1|sss-2>     使用预设（二选一）
+│     --config <path>             使用配置文件（二选一）
+│     --name <name>               代币名称（使用预设时必须）
+│     --symbol <symbol>           代币符号（使用预设时必须）
+│     --decimals <n>              精度（默认 6）
+│     --uri <uri>                 元数据 URI
+│   输出：
+│     Mint 地址、Config PDA 地址、交易签名
+│   示例：
+│     $ sss-token init --preset sss-2 --name "DREX" --symbol "DREX"
+│     ✅ Stablecoin initialized!
+│     Mint:       7xKX...abc
+│     Config:     3mNP...def
+│     Preset:     SSS-2 (Compliant)
+│     Tx:         5rTQ...ghi
+│     Explorer:   https://explorer.solana.com/tx/5rTQ...?cluster=devnet
+│
+├── mint <RECIPIENT> <AMOUNT>
+│   用途：铸造代币
+│   参数：
+│     --mint <address>            Mint 地址（如果管理多个稳定币）
+│   输出：
+│     交易签名、新供应量
+│   示例：
+│     $ sss-token mint 9xYZ...abc 1000000
+│     ✅ Minted 1,000,000 tokens to 9xYZ...abc
+│     New supply: 10,000,000
+│     Tx: 4kLM...xyz
+│
+├── burn <AMOUNT>
+│   用途：从调用者账户销毁代币
+│   参数：--mint <address>
+│
+├── freeze <TOKEN_ACCOUNT>
+│   用途：冻结一个 Token Account
+│
+├── thaw <TOKEN_ACCOUNT>
+│   用途：解冻一个 Token Account
+│
+├── pause
+│   用途：暂停整个系统
+│   输出：确认信息 + 当前状态
+│
+├── unpause
+│   用途：恢复系统
+│
+├── blacklist
+│   ├── add <ADDRESS> --reason <REASON>
+│   │   用途：将地址加入黑名单
+│   │   SSS-2 专属，SSS-1 时显示错误提示
+│   │
+│   ├── remove <ADDRESS>
+│   │   用途：将地址从黑名单移除
+│   │
+│   └── check <ADDRESS>
+│       用途：查询地址是否在黑名单中
+│       输出：状态、拉黑时间、原因
+│
+├── seize <TOKEN_ACCOUNT> --to <TREASURY_ACCOUNT>
+│   用途：没收资产
+│   SSS-2 专属
+│   输出：没收金额、交易签名
+│
+├── minters
+│   ├── list
+│   │   用途：列出所有铸币员及其配额
+│   │
+│   ├── add <ADDRESS> --quota <AMOUNT>
+│   │   用途：添加铸币员并设置配额
+│   │
+│   └── remove <ADDRESS>
+│       用途：移除铸币员
+│
+├── status
+│   用途：显示稳定币完整状态
+│   输出：
+│     $ sss-token status
+│     ┌─────────────────────────────────────┐
+│     │  DREX Stablecoin Status              │
+│     ├─────────────────────────────────────┤
+│     │  Mint:          7xKX...abc           │
+│     │  Preset:        SSS-2 (Compliant)    │
+│     │  Status:        ✅ Active             │
+│     │  Supply:        10,000,000.000000    │
+│     │  Total Minted:  12,500,000.000000    │
+│     │  Total Burned:   2,500,000.000000    │
+│     │  Features:                            │
+│     │    Permanent Delegate: ✅             │
+│     │    Transfer Hook:      ✅             │
+│     │    Confidential:       ❌             │
+│     │  Roles:                               │
+│     │    Master:  1 address                 │
+│     │    Minters: 3 addresses               │
+│     │    Blacklisted: 2 addresses           │
+│     └─────────────────────────────────────┘
+│
+├── supply
+│   用途：只显示当前供应量（简洁输出）
+│
+├── holders [--min-balance <AMOUNT>]
+│   用途：列出所有持有者及余额
+│
+└── audit-log [--action <TYPE>] [--from <DATE>] [--to <DATE>]
+    用途：显示操作审计日志
+    数据来源：链上事件 + 后端索引器
+```
+
+### 2.5.3 配置文件格式
+
+```toml
+# sss-config.toml 示例
+
+[token]
+name = "Brazilian Digital Real"
+symbol = "DREX"
+decimals = 6
+uri = "https://metadata.example.com/drex.json"
+
+[extensions]
+permanent_delegate = true
+transfer_hook = true
+default_account_frozen = false
+confidential_transfer = false
+
+[roles.minters]
+addresses = [
+    { pubkey = "9xYZ...abc", quota = 10_000_000_000 },
+    { pubkey = "3mNP...def", quota = 5_000_000_000 },
+]
+
+[roles.freezers]
+addresses = ["4kLM...ghi"]
+
+[roles.blacklisters]
+addresses = ["7pQR...jkl"]
+
+[roles.pausers]
+addresses = ["2nST...mno"]
+
+[roles.seizers]
+addresses = ["8wUV...pqr"]
+
+[network]
+cluster = "devnet"
+keypair_path = "~/.config/solana/id.json"
+commitment = "confirmed"
+```
+
+```
+验收标准（CLI 整体）：
+  □ 所有命令都有 --help 帮助文本
+  □ 错误时显示有用的错误信息（不是 raw panic）
+  □ 支持 --output json 输出 JSON 格式
+  □ 支持 --cluster <devnet|mainnet|custom_url> 切换网络
+  □ 支持 --keypair <path> 指定签名密钥
+  □ init --preset sss-1 和 --preset sss-2 都能正常工作
+  □ init --config config.toml 能正确解析配置文件
+  □ SSS-2 命令在 SSS-1 稳定币上调用时显示友好错误提示
+  □ 交易签名附带 Explorer 链接
+  □ 金额显示时考虑 decimals（1000000 显示为 1.000000）
+```
+
+### 完工笔记 (2026-02-21)
+
+- 已创建 CLI Rust 骨架（clap 命令结构与子命令占位）。
+
+- 已补齐主要命令清单与参数（执行逻辑待实现）。
+
+---
+
+## 2.6 D5：后端服务 — 详细规格
+
+### 2.6.1 技术栈
+
+```
+运行时：Node.js 20+
+框架：Fastify（高性能 HTTP 框架）
+语言：TypeScript
+数据库：PostgreSQL 15+
+缓存：Redis 7+（用于幂等键和队列）
+日志：pino（结构化 JSON 日志）
+容器化：Docker + Docker Compose
+```
+
+### 2.6.2 服务 1：Mint/Burn Service
+
+```
+端口：3001
+基础路径：/api/v1
+
+端点：
+
+POST /api/v1/mint
+  Headers:
+    Authorization: Bearer <api-key>
+    X-Idempotency-Key: <uuid>        ← 幂等键
+  Body:
+    {
+      "recipient": "9xYZ...abc",
+      "amount": 1000000,
+      "memo": "Customer deposit #12345"   // 可选
+    }
+  Response (201):
+    {
+      "success": true,
+      "signature": "5rTQ...ghi",
+      "supply": 10000000,
+      "timestamp": "2025-01-15T14:30:00Z"
+    }
+  Error Responses:
+    400: 参数验证失败
+    401: API key 无效
+    409: 幂等键冲突（返回之前的结果）
+    422: 链上交易失败（附带错误原因）
+    503: 系统暂停中
+
+POST /api/v1/burn
+  类似 mint，但从调用者账户销毁
+
+GET /api/v1/supply
+  Response:
+    {
+      "supply": 10000000,
+      "totalMinted": 12500000,
+      "totalBurned": 2500000,
+      "decimals": 6,
+      "formattedSupply": "10,000,000.000000"
+    }
+
+GET /api/v1/operations
+  Query: page, limit, type(mint|burn), from, to
+  Response: 分页的操作记录列表
+
+GET /api/v1/health
+  Response:
+    {
+      "status": "healthy",
+      "solanaConnection": "connected",
+      "database": "connected",
+      "redis": "connected",
+      "programId": "xxx",
+      "mintAddress": "xxx",
+      "isPaused": false,
+      "uptime": 86400
+    }
+
+内部逻辑：
+  幂等键机制（使用 Redis）：
+    1. 收到请求 → 用 idempotency_key 查 Redis
+    2. 如果存在且状态 = "completed" → 直接返回缓存的结果
+    3. 如果存在且状态 = "processing" → 返回 409
+    4. 如果不存在 → 写入 Redis (status=processing, TTL=24h)
+    5. 执行链上交易
+    6. 成功 → 更新 Redis (status=completed, result=...)
+    7. 失败 → 删除 Redis 条目
+
+验收标准：
+  □ mint/burn 端点正确调用链上程序
+  □ 幂等键防止重复铸造
+  □ 相同幂等键的第二次请求返回 409 + 第一次的结果
+  □ 参数验证（amount > 0, 地址格式正确, 等）
+  □ API key 认证工作
+  □ health 端点返回所有依赖的状态
+  □ 结构化日志输出
+  □ 请求限速（每秒最多 N 次）
+```
+
+### 2.6.3 服务 2：Event Indexer
+
+```
+端口：3002
+基础路径：/api/v1
+
+监听机制：
+  使用 Solana WebSocket 连接监听程序日志
+  connection.onLogs(programId, callback)
+  
+  解析 Anchor 事件：
+    1. 从 transaction logs 中提取事件数据
+    2. Base64 解码 → Borsh 反序列化
+    3. 根据 event discriminator 识别事件类型
+    4. 写入 PostgreSQL
+
+数据库 Schema：
+
+  CREATE TABLE events (
+    id              SERIAL PRIMARY KEY,
+    event_type      VARCHAR(50) NOT NULL,    -- "TokensMinted", "AccountFrozen", ...
+    config_address  VARCHAR(44) NOT NULL,
+    signature       VARCHAR(88) NOT NULL UNIQUE,
+    slot            BIGINT NOT NULL,
+    timestamp       TIMESTAMPTZ NOT NULL,
+    data            JSONB NOT NULL,          -- 事件的完整数据
+    processed_at    TIMESTAMPTZ DEFAULT NOW()
+  );
+
+  CREATE INDEX idx_events_type ON events(event_type);
+  CREATE INDEX idx_events_config ON events(config_address);
+  CREATE INDEX idx_events_timestamp ON events(timestamp);
+
+  CREATE TABLE webhooks (
+    id              SERIAL PRIMARY KEY,
+    url             VARCHAR(500) NOT NULL,
+    event_types     TEXT[] NOT NULL,           -- ["TokensMinted", "AccountFrozen"]
+    secret          VARCHAR(100) NOT NULL,     -- 用于签名验证
+    is_active       BOOLEAN DEFAULT TRUE,
+    created_at      TIMESTAMPTZ DEFAULT NOW()
+  );
+
+  CREATE TABLE webhook_deliveries (
+    id              SERIAL PRIMARY KEY,
+    webhook_id      INTEGER REFERENCES webhooks(id),
+    event_id        INTEGER REFERENCES events(id),
+    status          VARCHAR(20) NOT NULL,      -- "pending", "delivered", "failed"
+    attempts        INTEGER DEFAULT 0,
+    last_attempt_at TIMESTAMPTZ,
+    next_retry_at   TIMESTAMPTZ,
+    response_code   INTEGER,
+    created_at      TIMESTAMPTZ DEFAULT NOW()
+  );
+
+端点：
+
+GET /api/v1/events
+  Query: type, config, from, to, page, limit
+  Response: 分页的事件列表
+
+GET /api/v1/events/stream
+  SSE（Server-Sent Events）实时推送
+  客户端连接后会收到所有新事件
+
+POST /api/v1/webhooks
+  Body:
+    {
+      "url": "https://myapp.com/webhook",
+      "eventTypes": ["TokensMinted", "BlacklistAdded"],
+      "secret": "my-webhook-secret"
+    }
+
+DELETE /api/v1/webhooks/:id
+
+Webhook 推送格式：
+  POST <webhook_url>
+  Headers:
+    Content-Type: application/json
+    X-SSS-Signature: sha256=<hmac(body, secret)>
+    X-SSS-Event: TokensMinted
+    X-SSS-Delivery: <delivery_id>
+  Body:
+    {
+      "event": "TokensMinted",
+      "timestamp": "2025-01-15T14:30:00Z",
+      "data": { ... },
+      "signature": "5rTQ...ghi"
+    }
+
+  重试逻辑：
+    指数退避：1s → 2s → 4s → 8s → 16s → 32s
+    最大重试 6 次
+    超过 6 次标记为 failed
+
+验收标准：
+  □ 链上事件在 5 秒内被索引到数据库
+  □ 所有 12 种事件类型都能正确解析
+  □ SSE 端点能实时推送事件
+  □ Webhook 注册和推送正常工作
+  □ Webhook 重试逻辑正确
+  □ 重启后能从上次处理的 slot 继续
+  □ 处理重复事件（相同 signature 不重复存储）
+```
+
+### 2.6.4 服务 3：Compliance Service（SSS-2）
+
+```
+端口：3003
+基础路径：/api/v1
+条件启动：只在 SSS-2 profile 下启动
+
+端点：
+
+POST /api/v1/screening/check
+  Body: { "address": "9xYZ...abc" }
+  Response:
+    {
+      "address": "9xYZ...abc",
+      "riskLevel": "low|medium|high|critical",
+      "isBlacklisted": false,
+      "sanctions": {
+        "ofac": false,
+        "eu": false
+      },
+      "checkedAt": "2025-01-15T14:30:00Z"
+    }
+  注意：实际制裁检查对接第三方 API（Chainalysis 等）
+        SDK 提供接口，具体 API key 用户自己配置
+        如果未配置第三方 API，返回 "provider not configured"
+
+GET /api/v1/blacklist
+  Query: page, limit, active_only(bool)
+  Response: 分页的黑名单列表（从链上读取）
+
+POST /api/v1/blacklist/add
+  Body: { "address": "xxx", "reason": "OFAC match" }
+  调用链上 add_to_blacklist 指令
+
+POST /api/v1/blacklist/remove
+  Body: { "address": "xxx" }
+
+GET /api/v1/audit/export
+  Query: format(csv|json), from, to, action_type
+  Response: 下载审计报告文件
+  
+  CSV 格式：
+    timestamp,action,actor,target,amount,details,tx_signature
+    2025-01-15T14:30:00Z,MINT,9xYZ...abc,3mNP...def,1000000,"",5rTQ...ghi
+    2025-01-15T14:35:00Z,BLACKLIST_ADD,4kLM...jkl,7pQR...mno,,"OFAC match",8wUV...pqr
+
+POST /api/v1/monitoring/rules
+  Body:
+    {
+      "name": "Large Transfer Alert",
+      "condition": "event.type == 'TokensMinted' && event.data.amount > 1000000000",
+      "action": "webhook",
+      "webhookUrl": "https://alerts.mycompany.com/large-transfer"
+    }
+
+验收标准：
+  □ screening 端点返回合理的风险评级
+  □ blacklist 管理端点正确调用链上程序
+  □ 审计导出包含所有必要字段
+  □ CSV 格式可以被 Excel 正确打开
+  □ 监控规则可以被配置和触发
+  □ 服务在 SSS-1 模式下不启动（docker compose profile）
+```
+
+### 2.6.5 Docker Compose 配置
+
+```yaml
+# docker-compose.yml
+
+services:
+  mint-burn:
+    build: ./services/mint-burn-service
+    ports:
+      - "3001:3001"
+    environment:
+      - SOLANA_RPC_URL=${SOLANA_RPC_URL:-https://api.devnet.solana.com}
+      - PROGRAM_ID=${PROGRAM_ID}
+      - MINT_ADDRESS=${MINT_ADDRESS}
+      - AUTHORITY_KEYPAIR_PATH=/keys/authority.json
+      - DATABASE_URL=postgresql://sss:sss@postgres:5432/sss
+      - REDIS_URL=redis://redis:6379
+      - API_KEY=${API_KEY}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+    volumes:
+      - ./keys:/keys:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  indexer:
+    build: ./services/event-indexer
+    ports:
+      - "3002:3002"
+    environment:
+      - SOLANA_WS_URL=${SOLANA_WS_URL:-wss://api.devnet.solana.com}
+      - PROGRAM_ID=${PROGRAM_ID}
+      - DATABASE_URL=postgresql://sss:sss@postgres:5432/sss
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  compliance:
+    build: ./services/compliance-service
+    ports:
+      - "3003:3003"
+    profiles:
+      - compliant                 # 只在 SSS-2 时启动
+    environment:
+      - SOLANA_RPC_URL=${SOLANA_RPC_URL}
+      - PROGRAM_ID=${PROGRAM_ID}
+      - MINT_ADDRESS=${MINT_ADDRESS}
+      - DATABASE_URL=postgresql://sss:sss@postgres:5432/sss
+      - SCREENING_PROVIDER=${SCREENING_PROVIDER:-none}
+      - SCREENING_API_KEY=${SCREENING_API_KEY}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: sss
+      POSTGRES_PASSWORD: sss
+      POSTGRES_DB: sss
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./services/init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sss"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:
+
+# 使用方式：
+#   SSS-1: docker compose up
+#   SSS-2: docker compose --profile compliant up
+
+验收标准（Docker 整体）：
+  □ docker compose up 一次成功（无手动步骤）
+  □ 包含 .env.example 文件列出所有需要的环境变量
+  □ 健康检查全部通过后服务才开始接受请求
+  □ docker compose --profile compliant up 启动包含 compliance 的全套
+  □ 日志输出为结构化 JSON
+  □ 容器可以通过 docker compose down && docker compose up 重启
+```
+
+---
+
+## 2.7 D6：测试套件 — 详细规格
+
+### 2.7.1 测试分类
+
+```
+┌─────────────────────┬────────────┬──────────────────────────────────────────┐
+│ 测试类别             │ 工具        │ 覆盖内容                                  │
+├─────────────────────┼────────────┼──────────────────────────────────────────┤
+│ 链上单元测试          │ Anchor Test│ 每个指令的正常和异常路径                    │
+│ 链上集成测试          │ Anchor Test│ SSS-1 全流程、SSS-2 全流程                 │
+│ SDK 单元测试          │ Jest/Vitest│ 指令构建器、PDA 派生、配置验证              │
+│ SDK 集成测试          │ bankrun    │ SDK 调用链上程序的端到端测试                │
+│ Fuzz 测试            │ Trident    │ 随机指令序列下的不变量检查                  │
+│ Devnet E2E 测试      │ 自定义脚本  │ 真实网络部署和操作验证                     │
+│ 后端服务测试          │ Jest/Vitest│ API 端点、事件解析、Webhook                │
+└─────────────────────┴────────────┴──────────────────────────────────────────┘
+```
+
+### 2.7.2 链上测试用例清单
+
+```
+=== SSS-1 测试 ===
+
+describe("Initialize SSS-1")
+  ✓ 成功初始化 SSS-1 稳定币
+  ✓ Config PDA 数据正确
+  ✓ Mint 账户包含正确的扩展（MetadataPointer, MintCloseAuthority）
+  ✓ Mint 账户不包含 PermanentDelegate
+  ✓ Mint 账户不包含 TransferHook
+  ✓ 调用者获得 MASTER_AUTHORITY 角色
+  ✓ name 超过 32 字符 → NameTooLong 错误
+  ✓ symbol 超过 10 字符 → SymbolTooLong 错误
+
+describe("Mint")
+  ✓ MASTER 可以铸造
+  ✓ MINTER 可以铸造
+  ✓ 非 MINTER 无法铸造 → Unauthorized
+  ✓ 系统暂停时无法铸造 → SystemPaused
+  ✓ 超出配额无法铸造 → QuotaExceeded
+  ✓ 配额窗口过期后重置
+  ✓ total_minted 正确更新
+  ✓ 收款方 ATA 不存在时自动创建
+  ✓ amount = 0 → 无效参数错误
+  ✓ 铸造 u64::MAX → 溢出处理
+
+describe("Burn")
+  ✓ BURNER 可以销毁
+  ✓ 余额不足 → InsufficientBalance
+  ✓ total_burned 正确更新
+  ✓ supply 正确减少
+
+describe("Freeze/Thaw")
+  ✓ FREEZER 可以冻结
+  ✓ 冻结后无法转出
+  ✓ 冻结后无法转入（如果不是 default frozen）
+  ✓ 解冻后恢复
+  ✓ 非 FREEZER 无法操作
+
+describe("Pause/Unpause")
+  ✓ PAUSER 可以暂停
+  ✓ 暂停后 mint 失败
+  ✓ 暂停后 burn 失败
+  ✓ 暂停后 freeze 仍然可以
+  ✓ unpause 后恢复
+  ✓ 重复 pause 是幂等的
+
+describe("Roles")
+  ✓ MASTER 可以授予角色
+  ✓ 非 MASTER 无法授予角色
+  ✓ 可以同时授予多个角色
+  ✓ 撤销角色后操作被拒绝
+  ✓ transfer_authority 正确转移权力
+
+describe("SSS-2 feature gating on SSS-1")
+  ✓ add_to_blacklist → FeatureNotEnabled
+  ✓ remove_from_blacklist → FeatureNotEnabled
+  ✓ seize → FeatureNotEnabled
+
+=== SSS-2 测试 ===
+
+describe("Initialize SSS-2")
+  ✓ 成功初始化 SSS-2 稳定币
+  ✓ Mint 包含 PermanentDelegate 扩展
+  ✓ Mint 包含 TransferHook 扩展
+  ✓ ExtraAccountMetaList 正确初始化
+  ✓ Config PDA 的 feature flags 正确
+
+describe("Transfer Hook")
+  ✓ 未拉黑地址之间正常转账
+  ✓ 发送方拉黑 → 转账失败
+  ✓ 接收方拉黑 → 转账失败
+  ✓ 双方都拉黑 → 转账失败
+  ✓ 解除拉黑后恢复正常
+
+describe("Blacklist")
+  ✓ BLACKLISTER 可以拉黑地址
+  ✓ 重复拉黑 → AlreadyBlacklisted
+  ✓ 移除后 is_active = false
+  ✓ 移除后再次拉黑成功
+  ✓ 非 BLACKLISTER 无法操作
+
+describe("Seize")
+  ✓ 完整流程：拉黑 → 冻结 → 没收 成功
+  ✓ 未拉黑地址 → TargetNotBlacklisted
+  ✓ 未冻结账户 → AccountNotFrozen
+  ✓ 非 SEIZER → Unauthorized
+  ✓ 没收后目标余额 = 0
+  ✓ 没收后国库余额增加正确金额
+
+=== 集成测试 ===
+
+describe("SSS-1 Full Flow")
+  1. init SSS-1
+  2. add minter with quota
+  3. mint 1,000,000 to Alice
+  4. Alice transfers 500,000 to Bob
+  5. freeze Bob's account
+  6. Bob attempts transfer → fails
+  7. thaw Bob's account
+  8. Bob transfers successfully
+  9. burn 200,000 from Alice
+  10. verify supply = 800,000
+
+describe("SSS-2 Full Flow")
+  1. init SSS-2
+  2. setup roles: minter, blacklister, seizer
+  3. mint 1,000,000 to Alice
+  4. Alice transfers 500,000 to Bob → success
+  5. blacklist Bob
+  6. Alice transfers to Bob → fails (hook blocks)
+  7. Bob transfers to Carol → fails (hook blocks)
+  8. freeze Bob's account
+  9. seize Bob's assets to treasury
+  10. verify Bob balance = 0
+  11. verify treasury balance = 500,000
+  12. remove Bob from blacklist
+  13. mint to Bob → succeeds
+  14. Bob transfers → succeeds
+
+=== Fuzz 测试 ===
+
+describe("Invariants")
+  不变量 1: supply == sum(all_account_balances)
+  不变量 2: total_minted - total_burned == supply
+  不变量 3: 被拉黑且有效的地址的转账一定被 hook 拦截
+  不变量 4: 没有对应角色的地址一定无法执行角色限定的指令
+  不变量 5: 暂停状态下 mint 和 burn 一定失败
+
+验收标准：
+  □ 所有上述测试用例存在且通过
+  □ 测试覆盖率（以指令为单位）100%
+  □ 每个错误码至少有一个测试触发它
+  □ Fuzz 测试运行至少 10,000 次迭代无 panic
+  □ 集成测试可在 localnet 运行
+```
+
+---
+
+## 2.8 D7：文档 — 详细规格
+
+```
+┌──────────────┬──────────────────────────────────────────────────────────────┐
+│ 文档          │ 必须包含的内容                                                │
+├──────────────┼──────────────────────────────────────────────────────────────┤
+│ README.md     │ • 项目一句话介绍                                             │
+│               │ • 快速开始（3 步内跑起来）                                    │
+│               │ • SSS-1 vs SSS-2 对比表                                     │
+│               │ • 架构图（ASCII 或图片）                                     │
+│               │ • 目录结构说明                                               │
+│               │ • 如何运行测试                                               │
+│               │ • 如何部署到 Devnet                                          │
+│               │ • 链接到其他文档                                             │
+│               │ • License (MIT)                                             │
+│               │ • Credits (Superteam Brazil)                                │
+├──────────────┼──────────────────────────────────────────────────────────────┤
+│ARCHITECTURE.md│ • 三层模型详细说明                                           │
+│               │ • 数据流图（mint、transfer+hook、seize）                    │
+│               │ • PDA 设计和 seeds 说明                                     │
+│               │ • 安全模型（角色分离、feature gating、PDA authority）        │
+│               │ • Token-2022 扩展使用说明                                    │
+│               │ • 两个链上程序的关系                                         │
+│               │ • 后端服务架构和关系                                         │
+├──────────────┼──────────────────────────────────────────────────────────────┤
+│ SDK.md        │ • 安装方式                                                  │
+│               │ • 预设 vs 自定义配置                                         │
+│               │ • 完整 API 参考（每个方法的参数和返回值）                     │
+│               │ • TypeScript 代码示例（至少 5 个场景）                       │
+│               │ • 错误处理最佳实践                                           │
+│               │ • 高级用法（自定义交易构建）                                 │
+├──────────────┼──────────────────────────────────────────────────────────────┤
+│ OPERATIONS.md │ • 日常操作手册                                               │
+│               │ • 铸造/销毁 SOP                                             │
+│               │ • 冻结账户 SOP                                              │
+│               │ • 紧急暂停 SOP                                              │
+│               │ • 黑名单管理 SOP（SSS-2）                                   │
+│               │ • 资产没收 SOP（SSS-2）                                     │
+│               │ • 角色管理 SOP                                              │
+│               │ • 每个 SOP 包含：CLI 命令 + 预期输出 + 回滚步骤             │
+├──────────────┼──────────────────────────────────────────────────────────────┤
+│ SSS-1.md      │ • 标准标题、版本、状态                                       │
+│               │ • 概述和设计理念                                             │
+│               │ • 包含的 Token-2022 扩展列表                                │
+│               │ • 支持的指令列表和参数                                       │
+│               │ • 角色模型                                                  │
+│               │ • 适用场景                                                  │
+│               │ • 不适用场景（需要合规时用 SSS-2）                           │
+│               │ • 安全考虑                                                  │
+├──────────────┼──────────────────────────────────────────────────────────────┤
+│ SSS-2.md      │ • 同 SSS-1.md 的结构                                       │
+│               │ • 增加：合规功能详细说明                                     │
+│               │ • Transfer Hook 机制说明                                    │
+│               │ • Permanent Delegate 使用说明                               │
+│               │ • 黑名单 PDA 结构                                           │
+│               │ • 没收流程 4 重验证说明                                     │
+│               │ • 监管对标（GENIUS Act 对应条款）                            │
+├──────────────┼──────────────────────────────────────────────────────────────┤
+│ COMPLIANCE.md │ • 监管框架概述（GENIUS Act, MiCA 等）                       │
+│               │ • SSS-2 如何满足监管要求                                    │
+│               │ • 审计日志格式定义                                           │
+│               │ • 制裁筛查集成指南                                           │
+│               │ • 交易监控最佳实践                                           │
+│               │ • 数据保留策略建议                                           │
+├──────────────┼──────────────────────────────────────────────────────────────┤
+│ API.md        │ • 后端 REST API 完整参考                                    │
+│               │ • 每个端点：URL、方法、请求体、响应体、错误码               │
+│               │ • 认证方式                                                  │
+│               │ • Webhook 格式和签名验证                                    │
+│               │ • SSE 事件流格式                                            │
+│               │ • 示例 curl 命令                                            │
+└──────────────┴──────────────────────────────────────────────────────────────┘
+
+验收标准：
+  □ 8 份文档全部存在
+  □ README 的快速开始可以在 5 分钟内跑通
+  □ 文档中的代码示例全部可以运行
+  □ 无拼写错误（可用 spellcheck 工具）
+  □ 包含必要的图表（ASCII 图或 Mermaid）
+  □ 交叉引用正确（文档之间的链接有效）
+```
+
+### 完工笔记 (2026-02-21)
+
+- 已创建 docs/ 下 8 份文档骨架（README、ARCHITECTURE、SDK、OPERATIONS、SSS-1、SSS-2、COMPLIANCE、API）。
+
+- 已补齐仓库根文件（README、LICENSE、.gitignore、.env.example）。
+
+---
+
+## 2.9 D8：Devnet 部署 — 详细规格
+
+```
+需要提交的证明：
+
+1. 程序部署
+   stablecoin-core Program ID: <具体地址>
+   transfer-hook Program ID: <具体地址>
+   
+   验证方式：评委在 https://explorer.solana.com 查看
+   程序应显示为 "Upgradeable" 且 "Verified" (如果使用 Anchor verify)
+
+2. SSS-1 示例操作
+   初始化交易: <tx signature>
+   铸造交易: <tx signature>
+   转账交易: <tx signature>
+   冻结交易: <tx signature>
+   解冻交易: <tx signature>
+   销毁交易: <tx signature>
+
+3. SSS-2 示例操作
+   初始化交易: <tx signature>
+   铸造交易: <tx signature>
+   转账交易（正常）: <tx signature>
+   拉黑交易: <tx signature>
+   转账交易（被拦截，失败）: <tx signature>  ← 这个很关键
+   冻结交易: <tx signature>
+   没收交易: <tx signature>
+
+4. 部署脚本
+   提供可复现的部署脚本：
+   scripts/deploy-devnet.sh
+   scripts/demo-sss1.ts
+   scripts/demo-sss2.ts
+
+验收标准：
+  □ 所有 Program ID 在 Devnet Explorer 上可查
+  □ 所有交易签名在 Devnet Explorer 上可查
+  □ SSS-2 的"被 Hook 拦截"交易显示明确的失败原因
+  □ 部署脚本可以在全新环境中复现
+  □ README 中包含 Devnet 部署信息
+```
+
+---
+
+## 2.10 D9：Docker 配置验收
+
+```
+验收标准：
+  □ 仓库根目录有 docker-compose.yml
+  □ 有 .env.example 文件
+  □ cp .env.example .env && 填入 Program ID → docker compose up 成功
+  □ SSS-2 模式: docker compose --profile compliant up 成功
+  □ 所有服务的 health 端点返回 200
+  □ 日志输出可读
+  □ docker compose down && docker compose up 不丢数据（volumes）
+  □ 每个服务有独立的 Dockerfile
+  □ 使用多阶段构建减少镜像大小
+```
+
+---
+
+## 2.11 B1（Bonus）：SSS-3 隐私稳定币
+
+```
+标注：实验性 / 概念验证
+
+Token-2022 扩展：
+  ConfidentialTransfer — 转账金额加密
+
+实现范围：
+  1. 初始化支持 confidential_transfer 扩展
+  2. 配置 auditor ElGamal 公钥
+  3. 演示加密转账
+  4. 白名单（Allowlist）PDA 注册表
+
+限制说明：
+  • Confidential Transfer 的 SDK 支持仍在早期
+  • 某些操作可能需要客户端密码学计算
+  • 文档标注为 "experimental"
+
+验收标准：
+  □ SSS-3.md 文档存在并说明设计
+  □ 初始化成功创建带 ConfidentialTransfer 扩展的 Mint
+  □ 至少有一个加密转账的成功测试
+  □ 文档清晰标注"实验性"和限制
+```
+
+---
+
+## 2.12 B2（Bonus）：Oracle 集成模块
+
+```
+用途：非美元挂钩稳定币的汇率查询
+
+架构：
+  独立程序（不在 stablecoin-core 中）
+  读取 Switchboard 预言机价格
+  计算铸造/赎回价格
+
+示例场景：
+  发行 BRL 稳定币，铸造时按 USD/BRL 汇率计算
+  1 美元存入 → 按当前汇率铸造 X BRL 代币
+
+PriceFeedConfig PDA:
+  feed_address: Pubkey (Switchboard 喂价)
+  base_currency: "USD"
+  quote_currency: "BRL"
+  max_staleness_seconds: 60
+  max_deviation_bps: 100 (1%)
+
+验收标准：
+  □ Oracle 模块代码存在
+  □ 能从 Switchboard 读取价格
+  □ 价格过期时拒绝操作
+  □ 有对应的测试
+  □ 文档说明如何配置不同的价格源
+```
+
+---
+
+## 2.13 B3（Bonus）：Interactive Admin TUI
+
+```
+工具：ratatui (Rust TUI 框架)
+功能：终端界面实时监控和操作
+
+界面布局：
+  ┌─────────────────────────────────────────────────┐
+  │  SSS Token Admin                    [Connected] │
+  ├──────────────────────┬──────────────────────────┤
+  │  Status              │  Recent Activity          │
+  │  ─────────           │  ────────────────          │
+  │  Supply: 10.00M      │  14:30 MINT +500k → A... │
+  │  Minted: 12.50M      │  14:28 FREEZE B...       │
+  │  Burned:  2.50M      │  14:25 BLACKLIST E...    │
+  │  Paused: No          │  14:22 TRANSFER 100k     │
+  │  Holders: 1,247      │  14:20 MINT +200k → C... │
+  │  Blacklisted: 3      │                           │
+  ├──────────────────────┴──────────────────────────┤
+  │  [M]int  [B]urn  [F]reeze  [P]ause  [Q]uit     │
+  └─────────────────────────────────────────────────┘
+
+功能：
+  • 实时刷新链上数据
+  • 键盘快捷键执行操作
+  • 操作确认对话框
+  • 彩色状态指示
+
+验收标准：
+  □ TUI 可以启动并显示稳定币状态
+  □ 实时刷新（每 5 秒或通过 WebSocket）
+  □ 至少支持 mint 和 status 查看
+  □ 优雅处理连接断开
+```
+
+---
+
+## 2.14 B4（Bonus）：示例前端
+
+```
+框架：Next.js 或纯 React + Vite
+钱包连接：@solana/wallet-adapter
+
+功能：
+  • 连接钱包
+  • 查看稳定币状态
+  • 管理员操作面板（铸造、冻结等）
+  • 余额查询
+
+验收标准：
+  □ 项目可以 npm run dev 启动
+  □ 能连接 Phantom/Solflare 钱包
+  □ 显示稳定币基本信息
+  □ 至少一个写入操作（如 mint）可以通过 UI 执行
+```
+
+---
+
+# 第三部分：实施计划与风险
+
+## 3.1 时间线（21天）
+
+```
+Week 1 (Day 1-7): 核心链上程序
+  Day 1-2: 项目搭建 + StablecoinConfig/RoleAccount PDA + initialize
+  Day 3:   mint + burn 指令
+  Day 4:   freeze/thaw + pause/unpause + roles 指令
+  Day 5:   blacklist + seize 指令 + 所有事件
+  Day 6:   transfer-hook 程序 + ExtraAccountMeta
+  Day 7:   链上程序完整单元测试
+
+Week 2 (Day 8-14): SDK + CLI + 集成
+  Day 8-9:   TypeScript SDK（主类 + 指令构建器）
+  Day 10:    TypeScript SDK（ComplianceModule + RoleManager）
+  Day 11-12: CLI（所有命令）
+  Day 13:    集成测试（SSS-1 + SSS-2 全流程）
+  Day 14:    Devnet 部署 + 演示脚本
+
+Week 3 (Day 15-21): 后端 + 文档 + Bonus
+  Day 15-16: 后端服务（Mint/Burn + Event Indexer）
+  Day 17:    后端服务（Compliance） + Docker Compose
+  Day 18:    Fuzz 测试（Trident）
+  Day 19:    文档（7 份）
+  Day 20:    Bonus 功能（TUI 优先）
+  Day 21:    最终审查 + PR 提交
+```
+
+## 3.2 风险识别与缓解
+
+```
+┌───────────────────────────────────┬─────┬──────────────────────────────────┐
+│ 风险                               │ 级别│ 缓解措施                          │
+├───────────────────────────────────┼─────┼──────────────────────────────────┤
+│ Transfer Hook ExtraAccountMeta     │ 高  │ 先写一个最小可行的 hook 程序       │
+│ 配置复杂，容易出错                  │     │ 验证 PDA 派生正确后再写业务逻辑    │
+│                                    │     │ 参考 spl-transfer-hook 官方示例   │
+├───────────────────────────────────┼─────┼──────────────────────────────────┤
+│ Permanent Delegate + Hook 交互     │ 中  │ 确保 seize 操作不经过 hook         │
+│ seize 时 hook 可能阻止转账          │     │ 或在 hook 中特殊处理 delegate 转账 │
+├───────────────────────────────────┼─────┼──────────────────────────────────┤
+│ Anchor + Token-2022 CPI 兼容性     │ 中  │ 使用 anchor-spl 最新版本           │
+│ 某些 Token-2022 指令可能需要手动 CPI│     │ 必要时手动构建 CPI 指令            │
+├───────────────────────────────────┼─────┼──────────────────────────────────┤
+│ Trident fuzz 测试工具链不稳定       │ 中  │ 准备 Backup：用 Rust 随机化测试    │
+│                                    │     │ Fuzz 做不出来就用覆盖率补偿        │
+├───────────────────────────────────┼─────┼──────────────────────────────────┤
+│ 时间不够完成所有 Bonus              │ 低  │ Bonus 按性价比排序：               │
+│                                    │     │ TUI > Frontend > Oracle > SSS-3  │
+│                                    │     │ 做不完就不做，核心部分优先         │
+├───────────────────────────────────┼─────┼──────────────────────────────────┤
+│ Devnet 部署失败或不稳定             │ 低  │ 本地 solana-test-validator 开发    │
+│                                    │     │ 最后 2 天再做 Devnet 部署          │
+└───────────────────────────────────┴─────┴──────────────────────────────────┘
+```
+
+## 3.3 关键技术风险深入：seize 与 Transfer Hook 的交互
+
+```
+问题：
+  seize 使用 Permanent Delegate 权限调用 TransferChecked。
+  TransferChecked 会触发 Transfer Hook。
+  被没收的地址在黑名单中。
+  Hook 会检查黑名单 → 拒绝转账 → seize 失败！
+
+这是一个真实的技术矛盾。
+
+解决方案选项：
+
+  方案 A：在 Hook 中检测 delegate 转账并放行
+    → Transfer Hook 接口不直接提供"是否是 delegate 转账"的信息
+    → 但可以通过 authority 参数推断：
+      如果 authority == config PDA（即 permanent delegate）
+      则说明这是管理员操作，放行
+    → 风险：需要验证这个推断是否可靠
+
+  方案 B：seize 先移除黑名单 → 转账 → 再加回黑名单
+    → 3 个指令在一个交易中
+    → 原子性保证安全
+    → 缺点：多了 2 个指令的 compute units
+
+  方案 C：seize 不使用 TransferChecked，使用底层 transfer
+    → Token-2022 的普通 transfer 不触发 hook
+    → 但 Permanent Delegate 可能要求使用 TransferChecked
+    → 需要验证
+
+  推荐：方案 A（在 Hook 中检测 delegate 身份）
+  备选：方案 B（临时移除黑名单）
+  
+  在实现时需要第一时间验证这个技术点。
+```
+
+---
+
+# 第四部分：最终验收检查清单
+
+```
+提交 PR 前的完整检查清单：
+
+链上程序
+  □ stablecoin-core 编译通过（anchor build）
+  □ transfer-hook 编译通过
+  □ 13 个指令全部实现
+  □ 12 种事件全部定义
+  □ 17 个错误码全部定义
+  □ Feature gating 在 SSS-1 上验证
+
+TypeScript SDK
+  □ npm run build 成功
+  □ 导出类型完整
+  □ JSDoc 注释覆盖所有公开方法
+  □ SSS-1 和 SSS-2 预设可用
+  □ 自定义配置可用
+  □ ComplianceModule 在 SSS-1 上优雅报错
+
+CLI
+  □ cargo build --release 成功
+  □ 所有命令有 --help
+  □ --output json 工作
+  □ --preset sss-1 和 sss-2 工作
+  □ --config <file> 工作
+  □ SSS-2 命令在 SSS-1 上友好报错
+
+后端服务
+  □ docker compose up 一次成功
+  □ docker compose --profile compliant up 成功
+  □ health 端点全部 200
+  □ mint API 端点工作
+  □ 幂等键工作
+  □ 事件索引器捕获事件
+
+测试
+  □ anchor test 全部通过
+  □ SDK 测试全部通过
+  □ SSS-1 集成测试通过
+  □ SSS-2 集成测试通过
+  □ Feature gating 测试通过
+  □ Fuzz 测试运行 10,000 次无 panic
+
+Devnet
+  □ 两个程序 Program ID 记录
+  □ SSS-1 演示交易签名记录
+  □ SSS-2 演示交易签名记录
+  □ 包含被 Hook 拦截的失败交易签名
+
+文档
+  □ README.md ✓
+  □ ARCHITECTURE.md ✓
+  □ SDK.md ✓
+  □ OPERATIONS.md ✓
+  □ SSS-1.md ✓
+  □ SSS-2.md ✓
+  □ COMPLIANCE.md ✓
+  □ API.md ✓
+
+项目配置
+  □ LICENSE (MIT) ✓
+  □ .env.example ✓
+  □ .gitignore ✓
+  □ PR 描述清晰完整
+```

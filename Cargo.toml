@@ -1,0 +1,6 @@
+[workspace]
+members = [
+  "programs/stablecoin-core",
+  "programs/transfer-hook",
+]
+resolver = "2"
