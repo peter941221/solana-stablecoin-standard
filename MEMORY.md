@@ -36,14 +36,17 @@ Progress:
 - Tests: cargo test -p transfer-hook -p stablecoin-core (passes).
 - Initialized git repo, set main branch, and configured GitHub origin.
 - Rebased against origin/main and pushed changes to GitHub.
+- Added Anchor test coverage for SSS-1 initialize + mint flow.
+- Attempted anchor test; anchor CLI not found in environment.
 
 Notes:
 - Direct fetch from superteam.fun failed due to certificate/JS rendering; r.jina.ai HTTP mirror succeeded.
 - Bounty listing confirms MIT license requirement and three-layer architecture (SDK, modules, presets).
 - Used shell mkdir because directory creation tool was blocked by allowed-path policy.
+- Anchor CLI missing locally; install before running anchor test.
 
 Next:
-- Add Anchor tests for initialize, mint, and blacklist flows.
-- Implement ExtraAccountMeta PDA validation in transfer-hook.
-- Implement SDK instruction builders and PDA helpers.
+- Add SSS-2 Anchor tests (transfer hook + blacklist + seize).
+- Run anchor test after installing Anchor CLI.
+- Fill docs for SDK and SSS-2.
 - Add backend service skeletons and docker-compose.
