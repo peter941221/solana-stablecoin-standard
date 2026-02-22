@@ -35,6 +35,7 @@ Progress:
 - Added initialize/update extra account meta list handlers for transfer-hook.
 - Tests: cargo test -p transfer-hook -p stablecoin-core (passes).
 - Initialized git repo, set main branch, and configured GitHub origin.
+- Rebased against origin/main and pushed changes to GitHub.
 
 Notes:
 - Direct fetch from superteam.fun failed due to certificate/JS rendering; r.jina.ai HTTP mirror succeeded.
