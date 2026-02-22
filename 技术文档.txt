@@ -847,8 +847,6 @@ pub enum StablecoinError {
 
 - 已实现 initialize / mint / burn / freeze / thaw / pause / unpause / roles / blacklist / seize 的核心逻辑与事件发射。
 
-- initialize 已补齐：Mint 扩展初始化 + TokenMetadata 初始化 + ExtraAccountMetaList CPI 初始化。
-
 - 已加入角色校验、feature gating、配额窗口（默认 24h）与溢出保护。
 
 ---
@@ -881,43 +879,36 @@ ExtraAccountMetaList 是 Transfer Hook 的关键机制。
 这些额外账户通过 ExtraAccountMeta 的 seeds 机制动态派生：
 
 ExtraAccountMeta 列表 = [
-    // Core Program（固定公钥，供外部 PDA 派生引用）
+    // 源地址的 BlacklistEntry
     ExtraAccountMeta {
-        discriminator: PUBKEY,
-        pubkey: stablecoin_core_program_id,
+        discriminator: PDA_DISCRIMINATOR,
+        seeds: [
+            Seed::Literal("blacklist"),
+            Seed::AccountKey(config_pda_index),   // 引用 config PDA 的 key
+            Seed::AccountKey(source_owner_index),  // 引用 source owner 的 key
+        ],
+        program_id: stablecoin_core_program_id,
+        is_signer: false,
+        is_writable: false,
+    },
+    // 目标地址的 BlacklistEntry
+    ExtraAccountMeta {
+        discriminator: PDA_DISCRIMINATOR,
+        seeds: [
+            Seed::Literal("blacklist"),
+            Seed::AccountKey(config_pda_index),
+            Seed::AccountKey(destination_owner_index),
+        ],
+        program_id: stablecoin_core_program_id,
         is_signer: false,
         is_writable: false,
     },
     // StablecoinConfig PDA
     ExtraAccountMeta {
-        discriminator: EXTERNAL_PDA,
+        discriminator: PDA_DISCRIMINATOR,
         seeds: [
             Seed::Literal("stablecoin"),
             Seed::AccountKey(mint_index),
-        ],
-        program_id: stablecoin_core_program_id,
-        is_signer: false,
-        is_writable: false,
-    },
-    // 源地址的 BlacklistEntry（owner 从 Token Account 数据中取）
-    ExtraAccountMeta {
-        discriminator: EXTERNAL_PDA,
-        seeds: [
-            Seed::Literal("blacklist"),
-            Seed::AccountKey(config_pda_index),
-            Seed::AccountData(source_token_account_index, owner_offset = 32, length = 32),
-        ],
-        program_id: stablecoin_core_program_id,
-        is_signer: false,
-        is_writable: false,
-    },
-    // 目标地址的 BlacklistEntry（owner 从 Token Account 数据中取）
-    ExtraAccountMeta {
-        discriminator: EXTERNAL_PDA,
-        seeds: [
-            Seed::Literal("blacklist"),
-            Seed::AccountKey(config_pda_index),
-            Seed::AccountData(destination_token_account_index, owner_offset = 32, length = 32),
         ],
         program_id: stablecoin_core_program_id,
         is_signer: false,
@@ -941,10 +932,9 @@ ExtraAccountMetaList PDA seeds: ["extra-account-metas", mint_pubkey.as_ref()]
   [2] destination_token_account
   [3] source_owner
   [4] extra_account_metas_pda
-  [5] stablecoin_core_program   ← 我们的 extra account
-  [6] stablecoin_config         ← 我们的 extra account
-  [7] source_blacklist_entry    ← 我们的 extra account
-  [8] destination_blacklist_entry ← 我们的 extra account
+  [5] source_blacklist_entry    ← 我们的 extra account
+  [6] destination_blacklist_entry ← 我们的 extra account
+  [7] stablecoin_config         ← 我们的 extra account
 
 执行逻辑：
   1. 验证 extra_account_metas_pda 的正确性
@@ -1011,8 +1001,6 @@ ExtraAccountMetaList PDA seeds: ["extra-account-metas", mint_pubkey.as_ref()]
 - 已实现 execute 黑名单检查逻辑（空账户放行，is_active 拒绝）。
 
 - 已加入 extra_account_metas 所属程序校验与 feature gating。
-
-- 已加入 ExtraAccountMetaList seeds 校验（含 Token Account owner offset = 32）。
 
 ---
 

@@ -16,9 +16,25 @@ Progress:
 - Implemented stablecoin-core instruction logic (roles, mint/burn, freeze/thaw, pause, blacklist, seize).
 - Implemented transfer-hook blacklist checks and feature gating.
 - Added helper constants and role validation utilities.
-- Added missing initialize errors in stablecoin-core.
-- Added transfer-hook ExtraAccountMetaList seeds validation and aligned extra account order.
-- Updated 技术文档.txt to reflect new ExtraAccountMeta list and account order.
+- Adjusted SPL dependency versions for Solana 1.18/Anchor 0.30 compatibility.
+- Fixed init_if_needed usage, payer mutability, and bump handling.
+- Updated program IDs for stablecoin-core and transfer-hook.
+- Switched token accounts to token_interface + InterfaceAccount types.
+- Fixed signer seed lifetimes and config borrow in initialize.
+- Tests: cargo test -p stablecoin-core -p transfer-hook (passed with warnings).
+- Added transfer-hook extra account meta validation and corrected account order.
+- Added spl-tlv-account-resolution dependency for transfer-hook.
+- Suppressed unexpected cfg warnings and removed unused extra-account const.
+- Synced Anchor.toml program IDs to new core/hook IDs.
+- Implemented SDK PDA helpers, program ID constants, and instruction builders.
+- Exported SDK instructions/utils and added @types/node for TS builds.
+- Implemented SDK stablecoin client, compliance module, and role manager.
+- Added account decoders and transaction sender helpers in SDK utils.
+- SDK build: npm install + npm run build (passes). Added package-lock.json.
+- Reworked transfer-hook to handle SPL transfer-hook interface instructions via custom entrypoint.
+- Added initialize/update extra account meta list handlers for transfer-hook.
+- Tests: cargo test -p transfer-hook -p stablecoin-core (passes).
+- Initialized git repo, set main branch, and configured GitHub origin.
 
 Notes:
 - Direct fetch from superteam.fun failed due to certificate/JS rendering; r.jina.ai HTTP mirror succeeded.
@@ -27,5 +43,6 @@ Notes:
 
 Next:
 - Add Anchor tests for initialize, mint, and blacklist flows.
+- Implement ExtraAccountMeta PDA validation in transfer-hook.
 - Implement SDK instruction builders and PDA helpers.
 - Add backend service skeletons and docker-compose.

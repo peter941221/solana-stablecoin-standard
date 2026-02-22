@@ -1,5 +1,6 @@
 use anchor_lang::prelude::*;
-use anchor_spl::token_2022::{self, Mint, Token2022, TokenAccount};
+use anchor_spl::token_2022::{self, Token2022};
+use anchor_spl::token_interface::{Mint, TokenAccount};
 
 use crate::constants::{ROLE_BURNER, ROLE_MASTER_AUTHORITY};
 use crate::errors::StablecoinError;
@@ -21,10 +22,10 @@ pub struct Burn<'info> {
     pub role_account: Account<'info, RoleAccount>,
 
     #[account(mut)]
-    pub mint: Account<'info, Mint>,
+    pub mint: InterfaceAccount<'info, Mint>,
 
     #[account(mut)]
-    pub burner_ata: Account<'info, TokenAccount>,
+    pub burner_ata: InterfaceAccount<'info, TokenAccount>,
 
     pub token_2022_program: Program<'info, Token2022>,
 }

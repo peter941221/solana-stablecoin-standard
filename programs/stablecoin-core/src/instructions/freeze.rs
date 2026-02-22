@@ -1,5 +1,6 @@
 use anchor_lang::prelude::*;
-use anchor_spl::token_2022::{self, Mint, Token2022, TokenAccount};
+use anchor_spl::token_2022::{self, Token2022};
+use anchor_spl::token_interface::{Mint, TokenAccount};
 
 use crate::constants::{ROLE_FREEZER, ROLE_MASTER_AUTHORITY};
 use crate::errors::StablecoinError;
@@ -20,10 +21,10 @@ pub struct FreezeAccount<'info> {
     )]
     pub role_account: Account<'info, RoleAccount>,
 
-    pub mint: Account<'info, Mint>,
+    pub mint: InterfaceAccount<'info, Mint>,
 
     #[account(mut)]
-    pub target_ata: Account<'info, TokenAccount>,
+    pub target_ata: InterfaceAccount<'info, TokenAccount>,
 
     pub token_2022_program: Program<'info, Token2022>,
 }
@@ -41,10 +42,10 @@ pub struct ThawAccount<'info> {
     )]
     pub role_account: Account<'info, RoleAccount>,
 
-    pub mint: Account<'info, Mint>,
+    pub mint: InterfaceAccount<'info, Mint>,
 
     #[account(mut)]
-    pub target_ata: Account<'info, TokenAccount>,
+    pub target_ata: InterfaceAccount<'info, TokenAccount>,
 
     pub token_2022_program: Program<'info, Token2022>,
 }
@@ -68,7 +69,9 @@ pub fn freeze_handler(ctx: Context<FreezeAccount>) -> Result<()> {
         StablecoinError::Unauthorized
     );
 
-    let signer_seeds: &[&[u8]] = &[b"stablecoin", mint.key().as_ref(), &[config.bump]];
+    let mint_key = mint.key();
+    let signer_seeds: &[&[u8]] = &[b"stablecoin", mint_key.as_ref(), &[config.bump]];
+    let signer_seeds_arr = [signer_seeds];
     let cpi_accounts = token_2022::FreezeAccount {
         account: ctx.accounts.target_ata.to_account_info(),
         mint: mint.to_account_info(),
@@ -77,7 +80,7 @@ pub fn freeze_handler(ctx: Context<FreezeAccount>) -> Result<()> {
     let cpi_ctx = CpiContext::new_with_signer(
         ctx.accounts.token_2022_program.to_account_info(),
         cpi_accounts,
-        &[signer_seeds],
+        &signer_seeds_arr,
     );
     token_2022::freeze_account(cpi_ctx)?;
 
@@ -114,7 +117,9 @@ pub fn thaw_handler(ctx: Context<ThawAccount>) -> Result<()> {
         StablecoinError::Unauthorized
     );
 
-    let signer_seeds: &[&[u8]] = &[b"stablecoin", mint.key().as_ref(), &[config.bump]];
+    let mint_key = mint.key();
+    let signer_seeds: &[&[u8]] = &[b"stablecoin", mint_key.as_ref(), &[config.bump]];
+    let signer_seeds_arr = [signer_seeds];
     let cpi_accounts = token_2022::ThawAccount {
         account: ctx.accounts.target_ata.to_account_info(),
         mint: mint.to_account_info(),
@@ -123,7 +128,7 @@ pub fn thaw_handler(ctx: Context<ThawAccount>) -> Result<()> {
     let cpi_ctx = CpiContext::new_with_signer(
         ctx.accounts.token_2022_program.to_account_info(),
         cpi_accounts,
-        &[signer_seeds],
+        &signer_seeds_arr,
     );
     token_2022::thaw_account(cpi_ctx)?;
 

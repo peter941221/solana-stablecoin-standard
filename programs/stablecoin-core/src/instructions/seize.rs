@@ -1,6 +1,7 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token_2022::spl_token_2022::state::AccountState;
-use anchor_spl::token_2022::{self, Mint, Token2022, TokenAccount};
+use anchor_spl::token_2022::{self, Token2022};
+use anchor_spl::token_interface::{Mint, TokenAccount};
 
 use crate::constants::{ROLE_MASTER_AUTHORITY, ROLE_SEIZER};
 use crate::errors::StablecoinError;
@@ -21,13 +22,13 @@ pub struct Seize<'info> {
     )]
     pub role_account: Account<'info, RoleAccount>,
 
-    pub mint: Account<'info, Mint>,
+    pub mint: InterfaceAccount<'info, Mint>,
 
     #[account(mut)]
-    pub target_ata: Account<'info, TokenAccount>,
+    pub target_ata: InterfaceAccount<'info, TokenAccount>,
 
     #[account(mut)]
-    pub treasury_ata: Account<'info, TokenAccount>,
+    pub treasury_ata: InterfaceAccount<'info, TokenAccount>,
 
     pub blacklist_entry: Account<'info, BlacklistEntry>,
 
@@ -74,7 +75,9 @@ pub fn handler(ctx: Context<Seize>) -> Result<()> {
 
     let amount = target_ata.amount;
 
-    let signer_seeds: &[&[u8]] = &[b"stablecoin", mint.key().as_ref(), &[config.bump]];
+    let mint_key = mint.key();
+    let signer_seeds: &[&[u8]] = &[b"stablecoin", mint_key.as_ref(), &[config.bump]];
+    let signer_seeds_arr = [signer_seeds];
     let cpi_accounts = token_2022::TransferChecked {
         from: target_ata.to_account_info(),
         mint: mint.to_account_info(),
@@ -84,7 +87,7 @@ pub fn handler(ctx: Context<Seize>) -> Result<()> {
     let cpi_ctx = CpiContext::new_with_signer(
         ctx.accounts.token_2022_program.to_account_info(),
         cpi_accounts,
-        &[signer_seeds],
+        &signer_seeds_arr,
     );
     token_2022::transfer_checked(cpi_ctx, amount, mint.decimals)?;
 

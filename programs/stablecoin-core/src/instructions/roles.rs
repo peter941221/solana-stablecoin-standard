@@ -20,6 +20,7 @@ pub struct UpdateMinterArgs {
 
 #[derive(Accounts)]
 pub struct UpdateRoles<'info> {
+    #[account(mut)]
     pub authority: Signer<'info>,
 
     #[account(mut)]
@@ -68,6 +69,7 @@ pub struct UpdateMinter<'info> {
 
 #[derive(Accounts)]
 pub struct TransferAuthority<'info> {
+    #[account(mut)]
     pub current_authority: Signer<'info>,
 
     #[account(mut)]
@@ -130,7 +132,7 @@ pub fn update_roles_handler(ctx: Context<UpdateRoles>, args: UpdateRolesArgs) ->
     }
     target_role_account.minted_current_window = 0;
     target_role_account.window_start = 0;
-    target_role_account.bump = *ctx.bumps.get("target_role_account").unwrap();
+    target_role_account.bump = ctx.bumps.target_role_account;
 
     emit!(RoleUpdated {
         config: config.key(),
@@ -195,7 +197,7 @@ pub fn transfer_authority_handler(ctx: Context<TransferAuthority>) -> Result<()>
     new_role_account.config = config.key();
     new_role_account.authority = ctx.accounts.new_authority.key();
     new_role_account.roles |= ROLE_MASTER_AUTHORITY;
-    new_role_account.bump = *ctx.bumps.get("new_role_account").unwrap();
+    new_role_account.bump = ctx.bumps.new_role_account;
 
     config.authority = ctx.accounts.new_authority.key();
 

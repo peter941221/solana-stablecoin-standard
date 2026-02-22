@@ -14,6 +14,7 @@ pub struct AddToBlacklistArgs {
 
 #[derive(Accounts)]
 pub struct AddToBlacklist<'info> {
+    #[account(mut)]
     pub blacklister: Signer<'info>,
 
     #[account(mut)]
@@ -96,7 +97,7 @@ pub fn add_handler(ctx: Context<AddToBlacklist>, args: AddToBlacklistArgs) -> Re
     entry.blacklisted_by = ctx.accounts.blacklister.key();
     entry.reason = args.reason;
     entry.is_active = true;
-    entry.bump = *ctx.bumps.get("blacklist_entry").unwrap();
+    entry.bump = ctx.bumps.blacklist_entry;
 
     emit!(BlacklistAdded {
         config: config.key(),

@@ -1,7 +1,8 @@
 use anchor_lang::prelude::*;
 use anchor_spl::{
     associated_token::AssociatedToken,
-    token_2022::{self, Mint, Token2022, TokenAccount},
+    token_2022::{self, Token2022},
+    token_interface::{Mint, TokenAccount},
 };
 
 use crate::constants::{MINT_QUOTA_WINDOW_SECONDS, ROLE_MASTER_AUTHORITY, ROLE_MINTER};
@@ -11,7 +12,8 @@ use crate::state::{RoleAccount, StablecoinConfig};
 use crate::utils::has_any_role;
 
 #[derive(Accounts)]
-pub struct Mint<'info> {
+pub struct MintTokens<'info> {
+    #[account(mut)]
     pub minter: Signer<'info>,
 
     #[account(mut)]
@@ -24,7 +26,7 @@ pub struct Mint<'info> {
     pub role_account: Account<'info, RoleAccount>,
 
     #[account(mut)]
-    pub mint: Account<'info, Mint>,
+    pub mint: InterfaceAccount<'info, Mint>,
 
     pub recipient: UncheckedAccount<'info>,
 
@@ -35,14 +37,14 @@ pub struct Mint<'info> {
         associated_token::authority = recipient,
         associated_token::token_program = token_2022_program
     )]
-    pub recipient_ata: Account<'info, TokenAccount>,
+    pub recipient_ata: InterfaceAccount<'info, TokenAccount>,
 
     pub token_2022_program: Program<'info, Token2022>,
     pub associated_token_program: Program<'info, AssociatedToken>,
     pub system_program: Program<'info, System>,
 }
 
-pub fn handler(ctx: Context<Mint>, amount: u64) -> Result<()> {
+pub fn handler(ctx: Context<MintTokens>, amount: u64) -> Result<()> {
     let config = &mut ctx.accounts.config;
     let role_account = &mut ctx.accounts.role_account;
     let mint = &ctx.accounts.mint;
@@ -83,7 +85,9 @@ pub fn handler(ctx: Context<Mint>, amount: u64) -> Result<()> {
         role_account.minted_current_window = new_window_total;
     }
 
-    let signer_seeds: &[&[u8]] = &[b"stablecoin", mint.key().as_ref(), &[config.bump]];
+    let mint_key = mint.key();
+    let signer_seeds: &[&[u8]] = &[b"stablecoin", mint_key.as_ref(), &[config.bump]];
+    let signer_seeds_arr = [signer_seeds];
     let cpi_accounts = token_2022::MintTo {
         mint: mint.to_account_info(),
         to: ctx.accounts.recipient_ata.to_account_info(),
@@ -92,7 +96,7 @@ pub fn handler(ctx: Context<Mint>, amount: u64) -> Result<()> {
     let cpi_ctx = CpiContext::new_with_signer(
         ctx.accounts.token_2022_program.to_account_info(),
         cpi_accounts,
-        &[signer_seeds],
+        &signer_seeds_arr,
     );
     token_2022::mint_to(cpi_ctx, amount)?;
 

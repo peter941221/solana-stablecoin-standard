@@ -1,21 +1,20 @@
 use anchor_lang::prelude::*;
 use anchor_lang::solana_program::program::{invoke, invoke_signed};
 use anchor_lang::system_program;
-use anchor_spl::token_2022::Token2022;
 use anchor_spl::token_2022::spl_token_2022::{
     extension::{default_account_state, metadata_pointer, transfer_hook, ExtensionType},
     instruction as token_2022_instruction,
     state::{AccountState, Mint as Token2022Mint},
 };
+use anchor_spl::token_2022::Token2022;
 use spl_pod::optional_keys::OptionalNonZeroPubkey;
+use spl_tlv_account_resolution::account::ExtraAccountMeta;
+use spl_tlv_account_resolution::seeds::Seed;
 use spl_token_metadata_interface::instruction as token_metadata_instruction;
 use spl_token_metadata_interface::state::TokenMetadata;
 use spl_transfer_hook_interface::{
-    get_extra_account_metas_address,
-    instruction as transfer_hook_instruction,
+    get_extra_account_metas_address, instruction as transfer_hook_instruction,
 };
-use spl_tlv_account_resolution::account::ExtraAccountMeta;
-use spl_tlv_account_resolution::seeds::Seed;
 use spl_type_length_value::variable_len_pack::VariableLenPack;
 
 use crate::constants::{MAX_NAME_LEN, MAX_SYMBOL_LEN, MAX_URI_LEN, ROLE_MASTER_AUTHORITY};
@@ -82,8 +81,14 @@ pub struct Initialize<'info> {
 }
 
 pub fn handler(ctx: Context<Initialize>, args: InitializeArgs) -> Result<()> {
-    require!(args.name.len() <= MAX_NAME_LEN, StablecoinError::NameTooLong);
-    require!(args.symbol.len() <= MAX_SYMBOL_LEN, StablecoinError::SymbolTooLong);
+    require!(
+        args.name.len() <= MAX_NAME_LEN,
+        StablecoinError::NameTooLong
+    );
+    require!(
+        args.symbol.len() <= MAX_SYMBOL_LEN,
+        StablecoinError::SymbolTooLong
+    );
     require!(args.uri.len() <= MAX_URI_LEN, StablecoinError::UriTooLong);
 
     if args.enable_transfer_hook {
@@ -93,37 +98,32 @@ pub fn handler(ctx: Context<Initialize>, args: InitializeArgs) -> Result<()> {
         );
     }
 
-    let name = args.name.clone();
-    let symbol = args.symbol.clone();
-    let uri = args.uri.clone();
-    let enable_permanent_delegate = args.enable_permanent_delegate;
-    let enable_transfer_hook = args.enable_transfer_hook;
-    let default_account_frozen = args.default_account_frozen;
-    let transfer_hook_program = args.transfer_hook_program;
-
     let mint_key = ctx.accounts.mint.key();
     let token_program_id = ctx.accounts.token_2022_program.key();
     let config_key = ctx.accounts.config.key();
-    let config_bump = *ctx.bumps.get("config").unwrap();
+    let config_bump = ctx.bumps.config;
     let config_seeds: &[&[u8]] = &[b"stablecoin", mint_key.as_ref(), &[config_bump]];
 
-    let mut extensions = vec![ExtensionType::MintCloseAuthority, ExtensionType::MetadataPointer];
-    if enable_permanent_delegate {
+    let mut extensions = vec![
+        ExtensionType::MintCloseAuthority,
+        ExtensionType::MetadataPointer,
+    ];
+    if args.enable_permanent_delegate {
         extensions.push(ExtensionType::PermanentDelegate);
     }
-    if enable_transfer_hook {
+    if args.enable_transfer_hook {
         extensions.push(ExtensionType::TransferHook);
     }
-    if default_account_frozen {
+    if args.default_account_frozen {
         extensions.push(ExtensionType::DefaultAccountState);
     }
 
     let token_metadata = TokenMetadata {
         update_authority: OptionalNonZeroPubkey::try_from(Some(config_key))?,
         mint: mint_key,
-        name: name.clone(),
-        symbol: symbol.clone(),
-        uri: uri.clone(),
+        name: args.name.clone(),
+        symbol: args.symbol.clone(),
+        uri: args.uri.clone(),
         additional_metadata: vec![],
     };
 
@@ -165,17 +165,20 @@ pub fn handler(ctx: Context<Initialize>, args: InitializeArgs) -> Result<()> {
         &[mint_info.clone(), token_program_info.clone()],
     )?;
 
-    if enable_permanent_delegate {
+    if args.enable_permanent_delegate {
         let delegate_ix = token_2022_instruction::initialize_permanent_delegate(
             &token_program_id,
             &mint_key,
             &config_key,
         )?;
-        invoke(&delegate_ix, &[mint_info.clone(), token_program_info.clone()])?;
+        invoke(
+            &delegate_ix,
+            &[mint_info.clone(), token_program_info.clone()],
+        )?;
     }
 
-    if enable_transfer_hook {
-        let hook_program_id = transfer_hook_program.unwrap();
+    if args.enable_transfer_hook {
+        let hook_program_id = args.transfer_hook_program.unwrap();
         let hook_ix = transfer_hook::instruction::initialize(
             &token_program_id,
             &mint_key,
@@ -185,12 +188,13 @@ pub fn handler(ctx: Context<Initialize>, args: InitializeArgs) -> Result<()> {
         invoke(&hook_ix, &[mint_info.clone(), token_program_info.clone()])?;
     }
 
-    if default_account_frozen {
-        let default_state_ix = default_account_state::instruction::initialize_default_account_state(
-            &token_program_id,
-            &mint_key,
-            &AccountState::Frozen,
-        )?;
+    if args.default_account_frozen {
+        let default_state_ix =
+            default_account_state::instruction::initialize_default_account_state(
+                &token_program_id,
+                &mint_key,
+                &AccountState::Frozen,
+            )?;
         invoke(
             &default_state_ix,
             &[mint_info.clone(), token_program_info.clone()],
@@ -212,17 +216,19 @@ pub fn handler(ctx: Context<Initialize>, args: InitializeArgs) -> Result<()> {
         &config_key,
         &mint_key,
         &config_key,
-        name.clone(),
-        symbol.clone(),
-        uri.clone(),
+        args.name.clone(),
+        args.symbol.clone(),
+        args.uri.clone(),
     );
+    let config_info = ctx.accounts.config.to_account_info();
+
     invoke_signed(
         &metadata_ix,
         &[
             mint_info.clone(),
-            ctx.accounts.config.to_account_info(),
+            config_info.clone(),
             mint_info.clone(),
-            ctx.accounts.config.to_account_info(),
+            config_info.clone(),
             token_program_info.clone(),
         ],
         &[config_seeds],
@@ -231,22 +237,22 @@ pub fn handler(ctx: Context<Initialize>, args: InitializeArgs) -> Result<()> {
     let config = &mut ctx.accounts.config;
     config.authority = ctx.accounts.authority.key();
     config.mint = mint_key;
-    config.name = name;
-    config.symbol = symbol;
-    config.uri = uri;
+    config.name = args.name;
+    config.symbol = args.symbol;
+    config.uri = args.uri;
     config.decimals = args.decimals;
     config.is_paused = false;
     config.total_minted = 0;
     config.total_burned = 0;
     config.audit_counter = 0;
     config.features = FeatureFlags {
-        permanent_delegate: enable_permanent_delegate,
-        transfer_hook: enable_transfer_hook,
+        permanent_delegate: args.enable_permanent_delegate,
+        transfer_hook: args.enable_transfer_hook,
         confidential: false,
-        default_frozen: default_account_frozen,
+        default_frozen: args.default_account_frozen,
     };
-    config.transfer_hook_program = if enable_transfer_hook {
-        transfer_hook_program
+    config.transfer_hook_program = if args.enable_transfer_hook {
+        args.transfer_hook_program
     } else {
         None
     };
@@ -259,9 +265,9 @@ pub fn handler(ctx: Context<Initialize>, args: InitializeArgs) -> Result<()> {
     role_account.mint_quota = None;
     role_account.minted_current_window = 0;
     role_account.window_start = 0;
-    role_account.bump = *ctx.bumps.get("role_account").unwrap();
+    role_account.bump = ctx.bumps.role_account;
 
-    if enable_transfer_hook {
+    if args.enable_transfer_hook {
         let hook_program_account = ctx
             .accounts
             .transfer_hook_program
@@ -273,7 +279,7 @@ pub fn handler(ctx: Context<Initialize>, args: InitializeArgs) -> Result<()> {
             .as_ref()
             .ok_or(StablecoinError::MissingExtraAccountMetas)?;
         require!(
-            Some(hook_program_account.key()) == transfer_hook_program,
+            Some(hook_program_account.key()) == args.transfer_hook_program,
             StablecoinError::InvalidTransferHookProgram
         );
 
@@ -297,7 +303,7 @@ pub fn handler(ctx: Context<Initialize>, args: InitializeArgs) -> Result<()> {
             &[
                 extra_metas_account.to_account_info(),
                 mint_info.clone(),
-                ctx.accounts.config.to_account_info(),
+                config_info.clone(),
                 ctx.accounts.system_program.to_account_info(),
                 hook_program_account.to_account_info(),
             ],
@@ -305,7 +311,11 @@ pub fn handler(ctx: Context<Initialize>, args: InitializeArgs) -> Result<()> {
         )?;
     }
 
-    let preset = if enable_transfer_hook { "SSS-2" } else { "SSS-1" };
+    let preset = if args.enable_transfer_hook {
+        "SSS-2"
+    } else {
+        "SSS-1"
+    };
 
     emit!(StablecoinInitialized {
         config: config.key(),

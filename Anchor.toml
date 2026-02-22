@@ -3,8 +3,8 @@ seeds = false
 skip-lint = false
 
 [programs.localnet]
-stablecoin_core = "SSSCore1111111111111111111111111111111111"
-transfer_hook = "SSSHook1111111111111111111111111111111111"
+stablecoin_core = "Ak9Rhow3tv2Df5u1ZVFWXqdUqeXynjGAhHGZ8qN4dJ6G"
+transfer_hook = "4A8pvyAMvPqypVh1gdgswu4YAsZfFDocQnWbvtnGP4bs"
 
 [provider]
 cluster = "localnet"
