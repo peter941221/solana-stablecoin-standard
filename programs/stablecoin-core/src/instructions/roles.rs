@@ -41,6 +41,7 @@ pub struct UpdateRoles<'info> {
     )]
     pub target_role_account: Account<'info, RoleAccount>,
 
+    /// CHECK: Verified against args.target and used only for PDA seeds.
     pub target: UncheckedAccount<'info>,
 
     pub system_program: Program<'info, System>,
@@ -91,6 +92,7 @@ pub struct TransferAuthority<'info> {
     )]
     pub new_role_account: Account<'info, RoleAccount>,
 
+    /// CHECK: Used only for PDA seeds and key comparison.
     pub new_authority: UncheckedAccount<'info>,
 
     pub system_program: Program<'info, System>,

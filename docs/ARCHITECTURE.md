@@ -2,35 +2,60 @@
 
 ## Three-Layer Model
 
-Layer 1: Base SDK
+L1 Base SDK -> L2 Modules -> L3 Presets
 
-Layer 2: Modules
++------------------+     +------------------+     +------------------+
+| Base SDK (L1)    | --> | Modules (L2)     | --> | Presets (L3)     |
+| tx builders      |     | compliance       |     | SSS-1, SSS-2     |
+| PDA helpers      |     | roles            |     | custom configs   |
++------------------+     +------------------+     +------------------+
 
-Layer 3: Presets
+## On-Chain Programs
 
-```
-Base SDK  ->  Modules  ->  Presets
-  (L1)          (L2)        (L3)
-```
+- stablecoin-core: single configurable program for SSS-1 and SSS-2.
 
-## Programs
+- transfer-hook: independent program for blacklist enforcement.
 
-- stablecoin-core (single configurable program)
+## Data Flow: Mint
 
-- transfer-hook (blacklist enforcement)
+Client
 
-## Data Flows
+  | build instruction
+  v
+stablecoin-core
 
-- Mint (TBD)
+  | PDA signs mint
+  v
+Token-2022
 
-- Transfer + Hook (TBD)
+## Data Flow: Transfer Hook (SSS-2)
 
-- Seize (TBD)
+Token-2022
+
+  | CPI
+  v
+transfer-hook
+
+  | read StablecoinConfig + BlacklistEntry
+  v
+allow or deny transfer
+
+## Data Flow: Seize (SSS-2)
+
+stablecoin-core
+
+  | permanent delegate
+  v
+Token-2022 transfer_checked
+
+  | move balance to treasury
+  v
+audit event emitted
 
 ## Security Model
 
-- Role separation (TBD)
+- Role separation via RoleAccount PDA.
 
-- Feature gating (TBD)
+- Feature gating for compliance-only instructions.
 
-- PDA authority model (TBD)
+- PDA authority for mint, freeze, and metadata.

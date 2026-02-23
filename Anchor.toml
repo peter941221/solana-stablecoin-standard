@@ -1,14 +1,19 @@
+[toolchain]
+
 [features]
-seeds = false
+resolution = true
 skip-lint = false
 
 [programs.localnet]
-stablecoin_core = "Ak9Rhow3tv2Df5u1ZVFWXqdUqeXynjGAhHGZ8qN4dJ6G"
-transfer_hook = "4A8pvyAMvPqypVh1gdgswu4YAsZfFDocQnWbvtnGP4bs"
+stablecoin_core = "5T8qkjgJVWcUVza36JVFq3GCiKwAXhunKc8NY2nNbtiZ"
+transfer_hook = "5gVGKwPB7qstEN5Kp8fJGCURGPGz2GQnYHQAtD1zKSLB"
+
+[registry]
+url = "https://api.apr.dev"
 
 [provider]
-cluster = "localnet"
+cluster = "http://127.0.0.1:8890"
 wallet = "~/.config/solana/id.json"
 
 [scripts]
-test = "anchor test"
+test = "npm test"

@@ -53,4 +53,98 @@ Next:
  - Run anchor test after installing cargo-build-sbf (or Solana CLI).
 - Fill docs for SDK and SSS-2.
 - Add backend service skeletons and docker-compose.
-- Install cargo-build-sbf (or Solana CLI) and re-run anchor test.
+ - Install cargo-build-sbf (or Solana CLI) and re-run anchor test.
+
+Date: 2026-02-22
+
+Progress:
+- Reviewed git status/diff/log to check recent progress.
+- Noted untracked file: model-calls.jsonl.
+- Reviewed 技术文档.txt for scope and deliverables.
+- Estimated overall completion at ~40-45% based on D1-D9.
+- Implemented Rust CLI command handlers for init/mint/burn/freeze/thaw/pause/unpause/blacklist/seize/minters/status/supply/holders/audit-log.
+- Added PDA/instruction builders, Solana config loading, amount parsing/formatting, and on-chain account decoding in CLI.
+- Added CLI unit tests for amount parsing/formatting.
+- Added CLI to workspace members and exposed stablecoin-core constants/state for reuse.
+- cargo test --manifest-path cli/Cargo.toml (passed; solana-client future-incompat warning).
+- Added backend services skeleton (Fastify) with mock modes for mint-burn, indexer, and compliance routes.
+- Added docker-compose.yml and services/init.sql for Postgres/Redis scaffolding.
+- Filled docs for SSS-1, SSS-2, SDK, API, Architecture, Compliance, Operations, CLI, and Deployment.
+- Added devnet deployment template at deployments/devnet.json.
+- Devnet deployment kept as template (no on-chain actions).
+
+Additional Progress:
+- Implemented services live mode building blocks: Postgres db helpers, Redis idempotency store, Solana RPC client, Anchor event IDL, event indexer, SSE stream, webhook dispatcher.
+- Reworked services entrypoint/context/server to wire live mode (mint-burn, compliance, indexer) with db/redis/solana.
+- Updated routes for live mode mint/burn, compliance (blacklist + audit export), and indexer (events, webhooks, SSE).
+- Updated services env/config, docker compose, and SQL schema for operations/events/webhooks/indexer state.
+- Added service tests for idempotency store and Solana helpers.
+- Added @types/pg and fixed monitoring rules map typing in db helper.
+- Installed services dependencies and updated test script to use Node --import tsx.
+- Fixed Redis client typing and rowCount null check; services tests pass; services build passes.
+- Ran npm audit; found high severity vulnerabilities in fastify and bigint-buffer (@solana/spl-token dependency).
+- docker-compose up -d failed because Docker engine was not available; compose also warned about missing env vars.
+- Updated deployment docs with Docker engine note and live mode env reminders.
+- Docker compose build/run succeeded (mint-burn + indexer + postgres + redis), health checks OK on /api/v1/health.
+- Started compliance profile; compliance service healthy on port 3003.
+- Ran mock-mode API smoke tests: mint/burn/supply/operations, blacklist add/remove/list, indexer events/webhooks, audit export (empty), screening check returned provider_not_configured.
+- Tried Solana CLI install; release downloads failed. Installed cargo-build-sbf from crates, but platform-tools download timed out/corrupted; anchor build blocked.
+- Added scripts for devnet deploy and demo flows; updated deployment docs and gitignore for keys.
+
+Date: 2026-02-23
+
+Progress:
+- Restored project memory context (MEMORY.md read) and summarized status for the user.
+- Collected official manual download steps for Solana CLI (Agave) from docs.anza.xyz.
+- Verified solana-release folder and bin contents; solana.exe runs.
+- Added user PATH entry for solana-release\bin and verified solana --version (3.1.8).
+- Attempted anchor test; build failed on Windows due to Rust std/toolchain mismatch in Solana platform-tools.
+- Investigated platform-tools cache and rustup toolchains; errors persist with sbpf toolchain.
+- Verified WSL status: Ubuntu default, WSL2 running; docker-desktop WSL distro running.
+- Checked WSL environment: solana/rust/cargo/anchor not installed inside WSL.
+- Installed WSL build dependencies via apt-get (llvm/clang/protobuf/etc).
+- Rustup install in WSL failed due to timeout downloading channel metadata.
+
+Notes:
+- Manual download source: https://github.com/anza-xyz/agave/releases/latest
+- Windows archive: solana-release-x86_64-pc-windows-msvc.tar.bz2
+- solana-cli version detected: 3.1.8 (Agave).
+
+Next:
+- Install Solana CLI manually if installer keeps failing, then re-run anchor test.
+
+Date: 2026-02-23
+
+Progress:
+- Reordered mint initialization: initialize_mint2 now runs before mint extensions.
+- Attempted anchor test on Windows; build failed due to Solana platform-tools Rust std mismatch.
+- Attempted anchor test via WSL using wsl.exe; path/WSL service errors blocked the run.
+
+Next:
+- Run anchor test from WSL once wsl.exe can access the workspace path.
+- Re-check InitializeMint2 failure after successful WSL test run.
+
+Progress:
+- WSL anchor test now runs; SSS-1 tests pass.
+- Fixed transfer-hook extra account meta initialization to use ExecuteInstruction discriminator.
+- Seize now thaws, transfers with transfer-hook remaining accounts, and refreezes.
+- Transfer-hook allows config authority transfers (seize) while still blocking blacklisted owners.
+- Added treasury blacklist entry setup in SSS-2 test and extra transfer-hook accounts.
+- Anchor tests now pass (SSS-1 + SSS-2).
+
+Progress:
+- Added tests/package.json to mark tests as ESM and remove module type warnings.
+- Added bigint rebuild helper and pretest hook to load native bindings when available.
+- Fixed anchor-syn lifetime warnings in vendor parser.
+- Added GitHub Actions CI workflow for Anchor tests on ubuntu.
+- Added mainnet deployment script and template, updated deployment docs.
+
+Progress:
+- Added CI caching for cargo and Solana installs.
+- Added deployment runbook with rollback steps.
+- Rebuilt bigint-buffer native bindings; anchor tests run clean.
+
+Progress:
+- Anchor tests re-run in WSL with no warnings.
+- CI workflow updated with caching and concurrency guard.
+- Deployment runbook linked from docs/DEPLOYMENT.md.

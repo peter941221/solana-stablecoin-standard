@@ -35,6 +35,7 @@ pub struct AddToBlacklist<'info> {
     )]
     pub blacklist_entry: Account<'info, BlacklistEntry>,
 
+    /// CHECK: Verified against args.wallet before use.
     pub wallet: UncheckedAccount<'info>,
 
     pub system_program: Program<'info, System>,

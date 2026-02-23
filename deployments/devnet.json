@@ -1,0 +1,9 @@
+{
+  "cluster": "devnet",
+  "stablecoin_core_program_id": "TBD",
+  "transfer_hook_program_id": "TBD",
+  "mint_address": "TBD",
+  "config_pda": "TBD",
+  "initialize_tx": "TBD",
+  "timestamp": "TBD"
+}

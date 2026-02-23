@@ -2,11 +2,11 @@
 
 use anchor_lang::prelude::*;
 
-mod constants;
+pub mod constants;
 mod errors;
 mod events;
 mod instructions;
-mod state;
+pub mod state;
 mod utils;
 
 use crate::instructions::blacklist::{AddToBlacklist, RemoveFromBlacklist};
@@ -32,7 +32,7 @@ use crate::instructions::roles::__client_accounts_update_minter;
 use crate::instructions::roles::__client_accounts_update_roles;
 use crate::instructions::seize::__client_accounts_seize;
 
-declare_id!("Ak9Rhow3tv2Df5u1ZVFWXqdUqeXynjGAhHGZ8qN4dJ6G");
+declare_id!("5T8qkjgJVWcUVza36JVFq3GCiKwAXhunKc8NY2nNbtiZ");
 
 #[program]
 pub mod stablecoin_core {

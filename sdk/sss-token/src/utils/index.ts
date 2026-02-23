@@ -16,10 +16,10 @@ import {
 } from "@solana/spl-token";
 
 export const STABLECOIN_CORE_PROGRAM_ID = new PublicKey(
-  "Ak9Rhow3tv2Df5u1ZVFWXqdUqeXynjGAhHGZ8qN4dJ6G",
+  "5T8qkjgJVWcUVza36JVFq3GCiKwAXhunKc8NY2nNbtiZ",
 );
 export const TRANSFER_HOOK_PROGRAM_ID = new PublicKey(
-  "4A8pvyAMvPqypVh1gdgswu4YAsZfFDocQnWbvtnGP4bs",
+  "5gVGKwPB7qstEN5Kp8fJGCURGPGz2GQnYHQAtD1zKSLB",
 );
 
 export const TOKEN_2022_PROGRAM_ID = TOKEN_2022_PROGRAM_ID_VALUE;

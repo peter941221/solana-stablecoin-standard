@@ -28,6 +28,7 @@ pub struct MintTokens<'info> {
     #[account(mut)]
     pub mint: InterfaceAccount<'info, Mint>,
 
+    /// CHECK: Used only as ATA authority; owner checked against recipient_ata.
     pub recipient: UncheckedAccount<'info>,
 
     #[account(

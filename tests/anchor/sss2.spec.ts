@@ -1,5 +1,5 @@
-import * as anchor from "@coral-xyz/anchor";
-import { Program } from "@coral-xyz/anchor";
+import anchor from "@coral-xyz/anchor";
+import type { Program } from "@coral-xyz/anchor";
 import { Keypair, PublicKey, SystemProgram } from "@solana/web3.js";
 import {
   ASSOCIATED_TOKEN_PROGRAM_ID,
@@ -17,7 +17,7 @@ describe("stablecoin-core sss-2", () => {
   const program = anchor.workspace.StablecoinCore as Program;
   const authority = (provider.wallet as anchor.Wallet).payer;
   const transferHookProgramId = new PublicKey(
-    "4A8pvyAMvPqypVh1gdgswu4YAsZfFDocQnWbvtnGP4bs",
+    "5gVGKwPB7qstEN5Kp8fJGCURGPGz2GQnYHQAtD1zKSLB",
   );
 
   const mintKeypair = Keypair.generate();
@@ -32,6 +32,14 @@ describe("stablecoin-core sss-2", () => {
   const [extraMetasPda] = PublicKey.findProgramAddressSync(
     [Buffer.from("extra-account-metas"), mintKeypair.publicKey.toBuffer()],
     transferHookProgramId,
+  );
+  const [treasuryBlacklistEntryPda] = PublicKey.findProgramAddressSync(
+    [
+      Buffer.from("blacklist"),
+      configPda.toBuffer(),
+      authority.publicKey.toBuffer(),
+    ],
+    program.programId,
   );
 
   it("initializes SSS-2, blacklists, and seizes", async () => {
@@ -121,6 +129,31 @@ describe("stablecoin-core sss-2", () => {
       })
       .rpc();
 
+    await program.methods
+      .addToBlacklist({
+        wallet: authority.publicKey,
+        reason: "Treasury entry",
+      })
+      .accounts({
+        blacklister: authority.publicKey,
+        config: configPda,
+        roleAccount: rolePda,
+        blacklistEntry: treasuryBlacklistEntryPda,
+        wallet: authority.publicKey,
+        systemProgram: SystemProgram.programId,
+      })
+      .rpc();
+
+    await program.methods
+      .removeFromBlacklist()
+      .accounts({
+        blacklister: authority.publicKey,
+        config: configPda,
+        roleAccount: rolePda,
+        blacklistEntry: treasuryBlacklistEntryPda,
+      })
+      .rpc();
+
     const treasuryAta = getAssociatedTokenAddressSync(
       mintKeypair.publicKey,
       authority.publicKey,
@@ -149,6 +182,10 @@ describe("stablecoin-core sss-2", () => {
         targetAta,
         treasuryAta,
         blacklistEntry: blacklistEntryPda,
+        extraMetasAccount: extraMetasPda,
+        stablecoinCoreProgram: program.programId,
+        destinationBlacklistEntry: treasuryBlacklistEntryPda,
+        transferHookProgram: transferHookProgramId,
         token2022Program: TOKEN_2022_PROGRAM_ID,
       })
       .rpc();

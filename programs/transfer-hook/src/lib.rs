@@ -10,19 +10,30 @@ use spl_tlv_account_resolution::state::ExtraAccountMetaList;
 use spl_transfer_hook_interface::collect_extra_account_metas_signer_seeds;
 use spl_transfer_hook_interface::get_extra_account_metas_address;
 use spl_transfer_hook_interface::get_extra_account_metas_address_and_bump_seed;
-use spl_transfer_hook_interface::instruction::{
-    ExecuteInstruction, InitializeExtraAccountMetaListInstruction, TransferHookInstruction,
-    UpdateExtraAccountMetaListInstruction,
-};
+use spl_transfer_hook_interface::instruction::{ExecuteInstruction, TransferHookInstruction};
 use std::str::FromStr;
 
 mod errors;
 mod state;
 
-declare_id!("4A8pvyAMvPqypVh1gdgswu4YAsZfFDocQnWbvtnGP4bs");
+declare_id!("5gVGKwPB7qstEN5Kp8fJGCURGPGz2GQnYHQAtD1zKSLB");
+
+#[cfg(feature = "idl-build")]
+#[program]
+pub mod transfer_hook {
+    use super::*;
+
+    pub fn idl_noop(_ctx: Context<IdlNoop>) -> Result<()> {
+        Ok(())
+    }
+}
+
+#[cfg(feature = "idl-build")]
+#[derive(Accounts)]
+pub struct IdlNoop {}
 
 fn stablecoin_core_program_id() -> Pubkey {
-    Pubkey::from_str("Ak9Rhow3tv2Df5u1ZVFWXqdUqeXynjGAhHGZ8qN4dJ6G")
+    Pubkey::from_str("5T8qkjgJVWcUVza36JVFq3GCiKwAXhunKc8NY2nNbtiZ")
         .expect("valid stablecoin core program id")
 }
 
@@ -74,12 +85,13 @@ struct ExecuteAccounts<'info> {
     stablecoin_config: &'info AccountInfo<'info>,
     source_blacklist_entry: &'info AccountInfo<'info>,
     destination_blacklist_entry: &'info AccountInfo<'info>,
+    transfer_hook_program: &'info AccountInfo<'info>,
 }
 
 impl<'info> ExecuteAccounts<'info> {
     fn parse(accounts: &'info [AccountInfo<'info>]) -> Result<Self> {
         require!(
-            accounts.len() >= 9,
+            accounts.len() >= 10,
             errors::TransferHookError::InvalidExtraAccountMetas
         );
         Ok(Self {
@@ -92,6 +104,7 @@ impl<'info> ExecuteAccounts<'info> {
             stablecoin_config: &accounts[6],
             source_blacklist_entry: &accounts[7],
             destination_blacklist_entry: &accounts[8],
+            transfer_hook_program: &accounts[9],
         })
     }
 }
@@ -193,8 +206,11 @@ fn execute_handler(
 
     validate_extra_account_metas(accounts, instruction_data, program_id)?;
 
-    check_blacklist(accounts.source_blacklist_entry)?;
-    check_blacklist(accounts.destination_blacklist_entry)?;
+    let is_core_authority = accounts.source_owner.key == accounts.stablecoin_config.key;
+    if !is_core_authority {
+        check_blacklist(accounts.source_blacklist_entry)?;
+        check_blacklist(accounts.destination_blacklist_entry)?;
+    }
 
     Ok(())
 }
@@ -255,11 +271,8 @@ fn initialize_extra_account_metas(
     }
 
     let mut data = accounts.extra_account_metas.try_borrow_mut_data()?;
-    ExtraAccountMetaList::init::<InitializeExtraAccountMetaListInstruction>(
-        &mut data,
-        extra_account_metas,
-    )
-    .map_err(|_| errors::TransferHookError::InvalidExtraAccountMetas)?;
+    ExtraAccountMetaList::init::<ExecuteInstruction>(&mut data, extra_account_metas)
+        .map_err(|_| errors::TransferHookError::InvalidExtraAccountMetas)?;
     Ok(())
 }
 
@@ -288,11 +301,8 @@ fn update_extra_account_metas(
     );
 
     let mut data = accounts.extra_account_metas.try_borrow_mut_data()?;
-    ExtraAccountMetaList::update::<UpdateExtraAccountMetaListInstruction>(
-        &mut data,
-        extra_account_metas,
-    )
-    .map_err(|_| errors::TransferHookError::InvalidExtraAccountMetas)?;
+    ExtraAccountMetaList::update::<ExecuteInstruction>(&mut data, extra_account_metas)
+        .map_err(|_| errors::TransferHookError::InvalidExtraAccountMetas)?;
     Ok(())
 }
 
@@ -311,6 +321,7 @@ fn validate_extra_account_metas(
         accounts.stablecoin_config.clone(),
         accounts.source_blacklist_entry.clone(),
         accounts.destination_blacklist_entry.clone(),
+        accounts.transfer_hook_program.clone(),
     ];
     let data = accounts.extra_account_metas.try_borrow_data()?;
     ExtraAccountMetaList::check_account_infos::<ExecuteInstruction>(

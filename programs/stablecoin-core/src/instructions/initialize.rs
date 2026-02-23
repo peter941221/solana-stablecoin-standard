@@ -1,21 +1,17 @@
 use anchor_lang::prelude::*;
-use anchor_lang::solana_program::program::{invoke, invoke_signed};
+use anchor_lang::solana_program::instruction::{AccountMeta, Instruction};
+use anchor_lang::solana_program::program::invoke;
 use anchor_lang::system_program;
 use anchor_spl::token_2022::spl_token_2022::{
-    extension::{default_account_state, metadata_pointer, transfer_hook, ExtensionType},
+    extension::{default_account_state, transfer_hook, ExtensionType},
     instruction as token_2022_instruction,
     state::{AccountState, Mint as Token2022Mint},
 };
 use anchor_spl::token_2022::Token2022;
-use spl_pod::optional_keys::OptionalNonZeroPubkey;
 use spl_tlv_account_resolution::account::ExtraAccountMeta;
 use spl_tlv_account_resolution::seeds::Seed;
-use spl_token_metadata_interface::instruction as token_metadata_instruction;
-use spl_token_metadata_interface::state::TokenMetadata;
-use spl_transfer_hook_interface::{
-    get_extra_account_metas_address, instruction as transfer_hook_instruction,
-};
-use spl_type_length_value::variable_len_pack::VariableLenPack;
+use spl_transfer_hook_interface::get_extra_account_metas_address;
+use spl_transfer_hook_interface::instruction::TransferHookInstruction;
 
 use crate::constants::{MAX_NAME_LEN, MAX_SYMBOL_LEN, MAX_URI_LEN, ROLE_MASTER_AUTHORITY};
 use crate::errors::StablecoinError;
@@ -69,8 +65,10 @@ pub struct Initialize<'info> {
     pub role_account: Account<'info, RoleAccount>,
 
     #[account(mut)]
+    /// CHECK: Optional extra metas account used only when transfer hook enabled.
     pub extra_metas_account: Option<UncheckedAccount<'info>>,
 
+    /// CHECK: Optional transfer hook program validated by args when enabled.
     pub transfer_hook_program: Option<UncheckedAccount<'info>>,
 
     pub token_2022_program: Program<'info, Token2022>,
@@ -102,12 +100,8 @@ pub fn handler(ctx: Context<Initialize>, args: InitializeArgs) -> Result<()> {
     let token_program_id = ctx.accounts.token_2022_program.key();
     let config_key = ctx.accounts.config.key();
     let config_bump = ctx.bumps.config;
-    let config_seeds: &[&[u8]] = &[b"stablecoin", mint_key.as_ref(), &[config_bump]];
 
-    let mut extensions = vec![
-        ExtensionType::MintCloseAuthority,
-        ExtensionType::MetadataPointer,
-    ];
+    let mut extensions = vec![ExtensionType::MintCloseAuthority];
     if args.enable_permanent_delegate {
         extensions.push(ExtensionType::PermanentDelegate);
     }
@@ -118,22 +112,8 @@ pub fn handler(ctx: Context<Initialize>, args: InitializeArgs) -> Result<()> {
         extensions.push(ExtensionType::DefaultAccountState);
     }
 
-    let token_metadata = TokenMetadata {
-        update_authority: OptionalNonZeroPubkey::try_from(Some(config_key))?,
-        mint: mint_key,
-        name: args.name.clone(),
-        symbol: args.symbol.clone(),
-        uri: args.uri.clone(),
-        additional_metadata: vec![],
-    };
-
     let base_len = ExtensionType::try_calculate_account_len::<Token2022Mint>(&extensions)?;
-    let metadata_len = token_metadata.get_packed_len()?.saturating_add(4);
-    let mint_len = base_len
-        .checked_add(metadata_len)
-        .ok_or(StablecoinError::Overflow)?;
-
-    let lamports = Rent::get()?.minimum_balance(mint_len);
+    let lamports = Rent::get()?.minimum_balance(base_len);
     let create_accounts = system_program::CreateAccount {
         from: ctx.accounts.authority.to_account_info(),
         to: ctx.accounts.mint.to_account_info(),
@@ -142,10 +122,11 @@ pub fn handler(ctx: Context<Initialize>, args: InitializeArgs) -> Result<()> {
         ctx.accounts.system_program.to_account_info(),
         create_accounts,
     );
-    system_program::create_account(create_ctx, lamports, mint_len as u64, &token_program_id)?;
+    system_program::create_account(create_ctx, lamports, base_len as u64, &token_program_id)?;
 
     let mint_info = ctx.accounts.mint.to_account_info();
     let token_program_info = ctx.accounts.token_2022_program.to_account_info();
+    let authority_info = ctx.accounts.authority.to_account_info();
 
     let close_ix = token_2022_instruction::initialize_mint_close_authority(
         &token_program_id,
@@ -153,17 +134,6 @@ pub fn handler(ctx: Context<Initialize>, args: InitializeArgs) -> Result<()> {
         Some(&config_key),
     )?;
     invoke(&close_ix, &[mint_info.clone(), token_program_info.clone()])?;
-
-    let metadata_pointer_ix = metadata_pointer::instruction::initialize(
-        &token_program_id,
-        &mint_key,
-        Some(config_key),
-        Some(mint_key),
-    )?;
-    invoke(
-        &metadata_pointer_ix,
-        &[mint_info.clone(), token_program_info.clone()],
-    )?;
 
     if args.enable_permanent_delegate {
         let delegate_ix = token_2022_instruction::initialize_permanent_delegate(
@@ -209,30 +179,6 @@ pub fn handler(ctx: Context<Initialize>, args: InitializeArgs) -> Result<()> {
         args.decimals,
     )?;
     invoke(&mint_ix, &[mint_info.clone(), token_program_info.clone()])?;
-
-    let metadata_ix = token_metadata_instruction::initialize(
-        &token_program_id,
-        &mint_key,
-        &config_key,
-        &mint_key,
-        &config_key,
-        args.name.clone(),
-        args.symbol.clone(),
-        args.uri.clone(),
-    );
-    let config_info = ctx.accounts.config.to_account_info();
-
-    invoke_signed(
-        &metadata_ix,
-        &[
-            mint_info.clone(),
-            config_info.clone(),
-            mint_info.clone(),
-            config_info.clone(),
-            token_program_info.clone(),
-        ],
-        &[config_seeds],
-    )?;
 
     let config = &mut ctx.accounts.config;
     config.authority = ctx.accounts.authority.key();
@@ -290,24 +236,28 @@ pub fn handler(ctx: Context<Initialize>, args: InitializeArgs) -> Result<()> {
             StablecoinError::InvalidExtraAccountMetas
         );
 
-        let extra_account_metas = build_extra_account_metas()?;
-        let extra_metas_ix = transfer_hook_instruction::initialize_extra_account_meta_list(
-            &hook_program_account.key(),
-            &expected_extra_metas,
-            &mint_key,
-            &config_key,
-            &extra_account_metas,
-        );
-        invoke_signed(
+        let extra_account_metas = build_extra_account_metas(&hook_program_account.key())?;
+        let extra_metas_ix = Instruction {
+            program_id: hook_program_account.key(),
+            accounts: vec![
+                AccountMeta::new(expected_extra_metas, false),
+                AccountMeta::new_readonly(mint_key, false),
+                AccountMeta::new(authority_info.key(), true),
+                AccountMeta::new_readonly(system_program::ID, false),
+            ],
+            data: TransferHookInstruction::InitializeExtraAccountMetaList {
+                extra_account_metas,
+            }
+            .pack(),
+        };
+        invoke(
             &extra_metas_ix,
             &[
                 extra_metas_account.to_account_info(),
                 mint_info.clone(),
-                config_info.clone(),
+                authority_info.clone(),
                 ctx.accounts.system_program.to_account_info(),
-                hook_program_account.to_account_info(),
             ],
-            &[config_seeds],
         )?;
     }
 
@@ -330,7 +280,7 @@ pub fn handler(ctx: Context<Initialize>, args: InitializeArgs) -> Result<()> {
     Ok(())
 }
 
-fn build_extra_account_metas() -> Result<Vec<ExtraAccountMeta>> {
+fn build_extra_account_metas(hook_program_id: &Pubkey) -> Result<Vec<ExtraAccountMeta>> {
     let core_program_meta = ExtraAccountMeta::new_with_pubkey(&crate::ID, false, false)?;
     let config_meta = ExtraAccountMeta::new_external_pda_with_seeds(
         CORE_PROGRAM_INDEX,
@@ -382,10 +332,13 @@ fn build_extra_account_metas() -> Result<Vec<ExtraAccountMeta>> {
         false,
     )?;
 
+    let hook_program_meta = ExtraAccountMeta::new_with_pubkey(hook_program_id, false, false)?;
+
     Ok(vec![
         core_program_meta,
         config_meta,
         source_blacklist_meta,
         destination_blacklist_meta,
+        hook_program_meta,
     ])
 }

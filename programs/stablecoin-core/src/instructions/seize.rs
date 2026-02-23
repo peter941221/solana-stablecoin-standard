@@ -1,4 +1,7 @@
 use anchor_lang::prelude::*;
+use anchor_lang::solana_program::instruction::AccountMeta;
+use anchor_lang::solana_program::program::invoke_signed;
+use anchor_spl::token_2022::spl_token_2022::instruction as token_2022_instruction;
 use anchor_spl::token_2022::spl_token_2022::state::AccountState;
 use anchor_spl::token_2022::{self, Token2022};
 use anchor_spl::token_interface::{Mint, TokenAccount};
@@ -32,10 +35,24 @@ pub struct Seize<'info> {
 
     pub blacklist_entry: Account<'info, BlacklistEntry>,
 
+    /// CHECK: Transfer hook extra account metas PDA.
+    pub extra_metas_account: UncheckedAccount<'info>,
+
+    /// CHECK: Stablecoin core program id for transfer hook validation.
+    #[account(address = crate::ID)]
+    pub stablecoin_core_program: UncheckedAccount<'info>,
+
+    /// CHECK: Destination blacklist entry PDA (may be empty).
+    pub destination_blacklist_entry: UncheckedAccount<'info>,
+
+    /// CHECK: Transfer hook program for the mint.
+    pub transfer_hook_program: UncheckedAccount<'info>,
+
     pub token_2022_program: Program<'info, Token2022>,
 }
 
 pub fn handler(ctx: Context<Seize>) -> Result<()> {
+    let config_info = ctx.accounts.config.to_account_info();
     let config = &mut ctx.accounts.config;
     let role_account = &ctx.accounts.role_account;
     let mint = &ctx.accounts.mint;
@@ -78,18 +95,59 @@ pub fn handler(ctx: Context<Seize>) -> Result<()> {
     let mint_key = mint.key();
     let signer_seeds: &[&[u8]] = &[b"stablecoin", mint_key.as_ref(), &[config.bump]];
     let signer_seeds_arr = [signer_seeds];
-    let cpi_accounts = token_2022::TransferChecked {
-        from: target_ata.to_account_info(),
+    let transfer_account_infos = vec![
+        target_ata.to_account_info(),
+        mint.to_account_info(),
+        ctx.accounts.treasury_ata.to_account_info(),
+        config.to_account_info(),
+        ctx.accounts.extra_metas_account.to_account_info(),
+        ctx.accounts.stablecoin_core_program.to_account_info(),
+        config_info.clone(),
+        ctx.accounts.blacklist_entry.to_account_info(),
+        ctx.accounts.destination_blacklist_entry.to_account_info(),
+        ctx.accounts.transfer_hook_program.to_account_info(),
+    ];
+    let mut transfer_ix = token_2022_instruction::transfer_checked(
+        ctx.accounts.token_2022_program.key,
+        target_ata.to_account_info().key,
+        mint.to_account_info().key,
+        ctx.accounts.treasury_ata.to_account_info().key,
+        config.to_account_info().key,
+        &[],
+        amount,
+        mint.decimals,
+    )?;
+    transfer_ix.accounts.extend([
+        AccountMeta::new_readonly(ctx.accounts.extra_metas_account.key(), false),
+        AccountMeta::new_readonly(ctx.accounts.stablecoin_core_program.key(), false),
+        AccountMeta::new_readonly(config_info.key(), false),
+        AccountMeta::new_readonly(ctx.accounts.blacklist_entry.key(), false),
+        AccountMeta::new_readonly(ctx.accounts.destination_blacklist_entry.key(), false),
+        AccountMeta::new_readonly(ctx.accounts.transfer_hook_program.key(), false),
+    ]);
+    let thaw_accounts = token_2022::ThawAccount {
+        account: target_ata.to_account_info(),
         mint: mint.to_account_info(),
-        to: ctx.accounts.treasury_ata.to_account_info(),
         authority: config.to_account_info(),
     };
-    let cpi_ctx = CpiContext::new_with_signer(
+    let thaw_ctx = CpiContext::new_with_signer(
         ctx.accounts.token_2022_program.to_account_info(),
-        cpi_accounts,
+        thaw_accounts,
         &signer_seeds_arr,
     );
-    token_2022::transfer_checked(cpi_ctx, amount, mint.decimals)?;
+    token_2022::thaw_account(thaw_ctx)?;
+    invoke_signed(&transfer_ix, &transfer_account_infos, &signer_seeds_arr)?;
+    let freeze_accounts = token_2022::FreezeAccount {
+        account: target_ata.to_account_info(),
+        mint: mint.to_account_info(),
+        authority: config.to_account_info(),
+    };
+    let freeze_ctx = CpiContext::new_with_signer(
+        ctx.accounts.token_2022_program.to_account_info(),
+        freeze_accounts,
+        &signer_seeds_arr,
+    );
+    token_2022::freeze_account(freeze_ctx)?;
 
     config.audit_counter = config
         .audit_counter

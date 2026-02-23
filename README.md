@@ -32,9 +32,9 @@ solana-stablecoin-standard/
 │   └── sss-token/
 ├── cli/
 ├── services/
-│   ├── mint-burn-service/
-│   ├── event-indexer/
-│   └── compliance-service/
+│   ├── Dockerfile
+│   ├── init.sql
+│   └── src/
 ├── tests/
 │   ├── anchor/
 │   └── sdk/
@@ -57,6 +57,10 @@ solana-stablecoin-standard/
 - docs/COMPLIANCE.md
 
 - docs/API.md
+
+- docs/CLI.md
+
+- docs/DEPLOYMENT.md
 
 ## License
 

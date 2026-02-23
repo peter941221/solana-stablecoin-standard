@@ -3,6 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "pretest": "node scripts/rebuild-bigint-buffer.js",
+    "rebuild:bigint": "node scripts/rebuild-bigint-buffer.js",
     "test": "ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts"
   },
   "dependencies": {

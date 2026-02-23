@@ -1,5 +1,5 @@
-import * as anchor from "@coral-xyz/anchor";
-import { Program } from "@coral-xyz/anchor";
+import anchor from "@coral-xyz/anchor";
+import type { Program } from "@coral-xyz/anchor";
 import { Keypair, PublicKey, SystemProgram } from "@solana/web3.js";
 import {
   ASSOCIATED_TOKEN_PROGRAM_ID,
@@ -52,7 +52,7 @@ describe("stablecoin-core", () => {
       .signers([mintKeypair])
       .rpc();
 
-    const config = await program.account.stablecoinConfig.fetch(configPda);
+    const config = await (program.account as any).stablecoinConfig.fetch(configPda);
     assert.ok(config.mint.equals(mintKeypair.publicKey));
     assert.equal(config.symbol, "TUSD");
     assert.equal(config.decimals, 6);
@@ -94,7 +94,7 @@ describe("stablecoin-core", () => {
     );
     assert.equal(account.amount, BigInt(amount.toString()));
 
-    const config = await program.account.stablecoinConfig.fetch(configPda);
+    const config = await (program.account as any).stablecoinConfig.fetch(configPda);
     assert.equal(config.totalMinted.toString(), amount.toString());
   });
 });
