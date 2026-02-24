@@ -22,8 +22,8 @@
 
 ## Proof Highlights
 
-- SSS-1 initialize: 2B1HUHGmFsuvB1sxNyyYZ98PnZMB3J2RFwx5oQgpsDo6v44spKMu4XyyD7DPeP5FGqa19Tp2EjUUD65vznVSSmzt
-- SSS-2 initialize: 3VDckxT5dVGH3SFGcZ28NAyKyeJHZp14AjtC4AoQMqzJu6uPeyhiWXnskDrvukZEsj5f7aFUE7G49MdSCTsqTuLa
+- SSS-1 initialize: qWxMWUiZcoqdTefgYY6DbuHx6vDqusFGR2yTaQYGpzxNsKjCuTpidgeTSpC5fSahcB3C86aGbKBmy1gAreCQTnE
+- SSS-2 initialize: 2gc9NDVEyzPdwhsz7nSSRZ8w6RmqXUKptSYLqRJx3CRwRAmJ1bXebcQy3EVH6wEfdWayPR3XRLGGRAyvBsP9A2Mm
 
 ## Reproduce Proofs
 

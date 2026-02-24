@@ -6,6 +6,10 @@ Solana Stablecoin Standard (SSS) is a modular standard for issuing stablecoins o
 It provides on-chain programs, a TypeScript SDK, a CLI, and service templates for
 compliance-aware stablecoins.
 
+## Links
+
+- Repository: https://github.com/peter941221/Solana-Stablecoin-Standard-Brazil
+
 ## Highlights
 
 - Two presets:
@@ -34,6 +38,22 @@ compliance-aware stablecoins.
 └──────────────────────────────────────┘
 
 ## How To Verify (Devnet)
+
+PowerShell:
+
+pwsh scripts/verify-devnet.ps1
+
+PowerShell dry run:
+
+pwsh scripts/verify-devnet.ps1 -DryRun
+
+Bash:
+
+bash scripts/verify-devnet.sh
+
+Bash dry run:
+
+bash scripts/verify-devnet.sh --dry-run
 
 SSS-1 demo:
 

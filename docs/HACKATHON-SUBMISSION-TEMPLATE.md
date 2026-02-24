@@ -43,6 +43,18 @@ PowerShell:
 
 pwsh scripts/verify-devnet.ps1
 
+PowerShell dry run:
+
+pwsh scripts/verify-devnet.ps1 -DryRun
+
+Bash:
+
+bash scripts/verify-devnet.sh
+
+Bash dry run:
+
+bash scripts/verify-devnet.sh --dry-run
+
 Manual:
 
 NODE_OPTIONS=--dns-result-order=ipv4first DISABLE_AIRDROP=1 \

@@ -2,8 +2,8 @@
   "cluster": "devnet",
   "stablecoin_core_program_id": "5T8qkjgJVWcUVza36JVFq3GCiKwAXhunKc8NY2nNbtiZ",
   "transfer_hook_program_id": "5gVGKwPB7qstEN5Kp8fJGCURGPGz2GQnYHQAtD1zKSLB",
-  "mint_address": "E2Ty2y2vMLWsoxEerpGUo2Rgu1goGoWfiGtFUzUpZpUH",
-  "config_pda": "4ypiyKhhdJLuaVkyiPna248sU4omB9N6hv6anM77xFnq",
-  "initialize_tx": "3VDckxT5dVGH3SFGcZ28NAyKyeJHZp14AjtC4AoQMqzJu6uPeyhiWXnskDrvukZEsj5f7aFUE7G49MdSCTsqTuLa",
-  "timestamp": "2026-02-24T08:11:46+08:00"
+  "mint_address": "5JpqqQwU7oCN6EC9Xyt4E6DC1CG5RcGvvHanU6YkD2ZP",
+  "config_pda": "4hz38jfq3CYgKqwoB4wFn8yFRNxRLN7vWenfS2X6EZDH",
+  "initialize_tx": "2gc9NDVEyzPdwhsz7nSSRZ8w6RmqXUKptSYLqRJx3CRwRAmJ1bXebcQy3EVH6wEfdWayPR3XRLGGRAyvBsP9A2Mm",
+  "timestamp": "2026-02-24T08:40:11+08:00"
 }
