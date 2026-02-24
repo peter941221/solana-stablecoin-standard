@@ -179,3 +179,10 @@ Progress:
 - Filled deployments/devnet.json with devnet IDs, mint, config PDA, initialize tx, and timestamp.
 - Updated README with devnet proofs and tx signatures.
 - Added docs/HACKATHON-DELIVERABLES.md checklist for submission.
+- Removed stray Userspeterkeypair.json from repo and ignored keypair patterns in .gitignore.
+- Hardened demo scripts to resolve keypair paths with os.homedir and clear error hints.
+- Added docs/HACKATHON-SUBMISSION.md for project description + highlights.
+- Verified keypair pubkey via solana-keygen pubkey (matches 4LmeKS...).
+- Added scripts/verify-devnet.ps1 to resolve keypair paths and re-run devnet demos.
+- Added docs/HACKATHON-SUBMISSION-TEMPLATE.md and updated README with verification/script links.
+- Demo scripts now read Solana CLI config for keypair fallback.

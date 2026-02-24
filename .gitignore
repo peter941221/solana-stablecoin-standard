@@ -13,3 +13,5 @@ rustc-ice-*.txt
 .idea/
 .vscode/
 model-calls.jsonl
+**/*keypair*.json
+**/id.json

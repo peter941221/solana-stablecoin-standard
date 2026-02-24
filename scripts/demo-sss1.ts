@@ -1,4 +1,6 @@
 import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 
 import {
   Connection,
@@ -40,9 +42,37 @@ function requireEnv(name: string): string {
   return value;
 }
 
+function readSolanaConfigKeypairPath(): string | null {
+  const configPath = path.join(os.homedir(), ".config", "solana", "cli", "config.yml");
+  if (!fs.existsSync(configPath)) {
+    return null;
+  }
+  const contents = fs.readFileSync(configPath, "utf-8");
+  const match = contents.match(/^keypair_path:\s*(.+)$/m);
+  if (!match) {
+    return null;
+  }
+  return match[1].trim().replace(/^['"]|['"]$/g, "");
+}
+
 function resolveKeypairPath(): string {
-  const fallbackHome = process.env.USERPROFILE ?? process.env.HOME ?? "";
-  return process.env.AUTHORITY_KEYPAIR_PATH ?? `${fallbackHome}/.config/solana/id.json`;
+  const envPath =
+    process.env.AUTHORITY_KEYPAIR_PATH ??
+    process.env.SOLANA_KEYPAIR_PATH ??
+    process.env.SOLANA_WALLET;
+  const fallbackPath = path.join(os.homedir(), ".config", "solana", "id.json");
+  const configPath = readSolanaConfigKeypairPath();
+  const candidates = [envPath, configPath, fallbackPath].filter(
+    (candidate): candidate is string => Boolean(candidate),
+  );
+  const keypairPath = candidates.find((candidate) => fs.existsSync(candidate));
+  if (!keypairPath) {
+    const candidateList = candidates.join(", ");
+    throw new Error(
+      `Keypair not found. Checked: ${candidateList}. Set AUTHORITY_KEYPAIR_PATH or copy your keypair to ${fallbackPath}.`,
+    );
+  }
+  return keypairPath;
 }
 
 function loadKeypair(path: string): Keypair {

@@ -42,6 +42,10 @@ This repo delivers a modular SDK with opinionated presets:
   - freeze: 5JNQJUok88Vet6TxcZ5yFRmXtRdaU1oB39PMyExt7LCNEKgm3zbKeNfakKM6uDtE5j8VVg3q8c7XjWnGRHNWZnbG
   - seize: 4XAAoQQTNQnAe6STVGKiGCbL8kRJPLeUW9tZ9fMddjicHxGVZHVimLHX33J8chqyLT58ncXzRP4zmoAgtTr15yNg
 
+## Verification
+
+- PowerShell: scripts/verify-devnet.ps1
+
 ## Repo Structure
 
 ```
@@ -84,6 +88,10 @@ solana-stablecoin-standard/
 - docs/DEPLOYMENT.md
 
 - docs/HACKATHON-DELIVERABLES.md
+
+- docs/HACKATHON-SUBMISSION.md
+
+- docs/HACKATHON-SUBMISSION-TEMPLATE.md
 
 ## License
 
