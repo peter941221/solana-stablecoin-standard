@@ -1,0 +1,91 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      ANCHOR_PROVIDER_URL: http://127.0.0.1:8890
+      SOLANA_URL: http://127.0.0.1:8890
+      ANCHOR_WALLET: /home/runner/.config/solana/id.json
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            clang \
+            libssl-dev \
+            libudev-dev \
+            llvm \
+            pkg-config \
+            protobuf-compiler
+
+      - name: Cache Solana CLI
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.local/share/solana
+          key: ${{ runner.os }}-solana-3.1.9
+
+      - name: Install Solana CLI
+        run: |
+          curl -sSfL https://release.anza.xyz/v3.1.9/install | sh || \
+          sh -c "$(curl -sSfL https://release.solana.com/v1.18.26/install)"
+
+      - name: Add Solana to PATH
+        run: echo "$HOME/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
+
+      - name: Create CI keypair
+        run: |
+          mkdir -p /home/runner/.config/solana
+          solana-keygen new --no-bip39-passphrase -o /home/runner/.config/solana/id.json
+          solana config set --url http://127.0.0.1:8890 --keypair /home/runner/.config/solana/id.json
+
+      - name: Install Anchor CLI
+        run: cargo install --locked --version 0.30.1 anchor-cli
+
+      - name: Install JS dependencies
+        run: npm ci
+
+      - name: Start local validator
+        run: |
+          solana-test-validator --reset --quiet --rpc-port 8890 &
+          sleep 5
+          solana airdrop 10
+
+      - name: Run Anchor tests
+        run: anchor test --skip-local-validator

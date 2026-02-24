@@ -1,0 +1,17 @@
+.env
+.env.*
+node_modules/
+dist/
+coverage/
+target/
+logs/
+keys/
+.anchor/
+solana-release/
+rustc-ice-*.txt
+.DS_Store
+.idea/
+.vscode/
+model-calls.jsonl
+**/*keypair*.json
+**/id.json

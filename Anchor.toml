@@ -1,0 +1,19 @@
+[toolchain]
+
+[features]
+resolution = true
+skip-lint = false
+
+[programs.localnet]
+stablecoin_core = "5T8qkjgJVWcUVza36JVFq3GCiKwAXhunKc8NY2nNbtiZ"
+transfer_hook = "5gVGKwPB7qstEN5Kp8fJGCURGPGz2GQnYHQAtD1zKSLB"
+
+[registry]
+url = "https://api.apr.dev"
+
+[provider]
+cluster = "http://127.0.0.1:8890"
+wallet = "~/.config/solana/id.json"
+
+[scripts]
+test = "npm test"

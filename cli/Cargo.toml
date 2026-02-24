@@ -1,0 +1,22 @@
+[package]
+name = "sss-token-cli"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0"
+anchor-lang = "0.30.1"
+borsh = "0.10.3"
+clap = { version = "4.5.0", features = ["derive"] }
+dirs = "5.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde_yaml = "0.9"
+sha2 = "0.10"
+solana-client = "1.18.17"
+solana-sdk = "1.18.17"
+spl-associated-token-account = "2.3.0"
+spl-token-2022 = "0.9.0"
+stablecoin-core = { path = "../programs/stablecoin-core", features = ["no-entrypoint"] }
+toml = "0.8"
+transfer-hook = { path = "../programs/transfer-hook", features = ["no-entrypoint"] }

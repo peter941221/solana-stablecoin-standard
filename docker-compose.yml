@@ -1,0 +1,102 @@
+services:
+  mint-burn:
+    build: ./services
+    command: ["node", "dist/index.js", "--service", "mint-burn"]
+    ports:
+      - "3001:3001"
+    environment:
+      - SERVICE_KIND=mint-burn
+      - SERVICE_MODE=${SERVICE_MODE:-mock}
+      - PORT=3001
+      - SOLANA_RPC_URL=${SOLANA_RPC_URL:-https://api.devnet.solana.com}
+      - COMMITMENT=${COMMITMENT:-confirmed}
+      - PROGRAM_ID=${PROGRAM_ID}
+      - MINT_ADDRESS=${MINT_ADDRESS}
+      - AUTHORITY_KEYPAIR_PATH=/keys/authority.json
+      - DATABASE_URL=postgresql://sss:sss@postgres:5432/sss
+      - REDIS_URL=redis://redis:6379
+      - API_KEY=${API_KEY}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - RATE_LIMIT_RPS=${RATE_LIMIT_RPS:-10}
+    volumes:
+      - ./keys:/keys:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  indexer:
+    build: ./services
+    command: ["node", "dist/index.js", "--service", "indexer"]
+    ports:
+      - "3002:3002"
+    environment:
+      - SERVICE_KIND=indexer
+      - SERVICE_MODE=${SERVICE_MODE:-mock}
+      - PORT=3002
+      - SOLANA_WS_URL=${SOLANA_WS_URL:-wss://api.devnet.solana.com}
+      - COMMITMENT=${COMMITMENT:-confirmed}
+      - PROGRAM_ID=${PROGRAM_ID}
+      - DATABASE_URL=postgresql://sss:sss@postgres:5432/sss
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - WEBHOOK_MAX_ATTEMPTS=${WEBHOOK_MAX_ATTEMPTS:-6}
+      - WEBHOOK_RETRY_BASE_SECONDS=${WEBHOOK_RETRY_BASE_SECONDS:-1}
+      - WEBHOOK_DISPATCH_INTERVAL_SECONDS=${WEBHOOK_DISPATCH_INTERVAL_SECONDS:-5}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  compliance:
+    build: ./services
+    command: ["node", "dist/index.js", "--service", "compliance"]
+    ports:
+      - "3003:3003"
+    profiles:
+      - compliant
+    environment:
+      - SERVICE_KIND=compliance
+      - SERVICE_MODE=${SERVICE_MODE:-mock}
+      - PORT=3003
+      - SOLANA_RPC_URL=${SOLANA_RPC_URL:-https://api.devnet.solana.com}
+      - COMMITMENT=${COMMITMENT:-confirmed}
+      - PROGRAM_ID=${PROGRAM_ID}
+      - MINT_ADDRESS=${MINT_ADDRESS}
+      - DATABASE_URL=postgresql://sss:sss@postgres:5432/sss
+      - SCREENING_PROVIDER=${SCREENING_PROVIDER:-none}
+      - SCREENING_API_KEY=${SCREENING_API_KEY}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - RATE_LIMIT_RPS=${RATE_LIMIT_RPS:-10}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: sss
+      POSTGRES_PASSWORD: sss
+      POSTGRES_DB: sss
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./services/init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sss"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:
