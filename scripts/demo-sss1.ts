@@ -5,6 +5,7 @@ import {
   Keypair,
   PublicKey,
   LAMPORTS_PER_SOL,
+  SystemProgram,
   Transaction,
 } from "@solana/web3.js";
 import {
@@ -49,24 +50,61 @@ function loadKeypair(path: string): Keypair {
   return Keypair.fromSecretKey(Uint8Array.from(raw));
 }
 
+async function withRetry<T>(
+  action: () => Promise<T>,
+  label: string,
+  attempts = 5,
+  delayMs = 2000,
+): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      return await action();
+    } catch (error) {
+      lastError = error;
+      if (attempt === attempts) {
+        break;
+      }
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+  }
+  throw new Error(`${label} failed after ${attempts} attempts: ${String(lastError)}`);
+}
+
 async function airdropIfNeeded(
   connection: Connection,
   pubkey: PublicKey,
   minLamports: number,
 ): Promise<void> {
-  const balance = await connection.getBalance(pubkey);
+  if (process.env.DISABLE_AIRDROP === "1") {
+    return;
+  }
+  const balance = await withRetry(
+    () => connection.getBalance(pubkey),
+    "getBalance",
+  );
   if (balance >= minLamports) {
     return;
   }
-  const signature = await connection.requestAirdrop(pubkey, minLamports - balance);
-  const latestBlockhash = await connection.getLatestBlockhash("confirmed");
-  await connection.confirmTransaction(
-    {
-      signature,
-      blockhash: latestBlockhash.blockhash,
-      lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
-    },
-    "confirmed",
+  const signature = await withRetry(
+    () => connection.requestAirdrop(pubkey, minLamports - balance),
+    "requestAirdrop",
+  );
+  const latestBlockhash = await withRetry(
+    () => connection.getLatestBlockhash("confirmed"),
+    "getLatestBlockhash",
+  );
+  await withRetry(
+    () =>
+      connection.confirmTransaction(
+        {
+          signature,
+          blockhash: latestBlockhash.blockhash,
+          lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
+        },
+        "confirmed",
+      ),
+    "confirmTransaction",
   );
 }
 
@@ -76,7 +114,10 @@ async function sendAndConfirm(
   signers: Keypair[],
   commitment: Commitment,
 ): Promise<string> {
-  const latestBlockhash = await connection.getLatestBlockhash(commitment);
+  const latestBlockhash = await withRetry(
+    () => connection.getLatestBlockhash(commitment),
+    "getLatestBlockhash",
+  );
   const tx = new Transaction({
     feePayer: signers[0].publicKey,
     blockhash: latestBlockhash.blockhash,
@@ -86,19 +127,48 @@ async function sendAndConfirm(
     tx.add(instruction);
   }
   tx.sign(...signers);
-  const signature = await connection.sendRawTransaction(tx.serialize());
-  const confirmation = await connection.confirmTransaction(
-    {
-      signature,
-      blockhash: latestBlockhash.blockhash,
-      lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
-    },
-    commitment,
+  const signature = await withRetry(
+    () => connection.sendRawTransaction(tx.serialize()),
+    "sendRawTransaction",
+  );
+  const confirmation = await withRetry(
+    () =>
+      connection.confirmTransaction(
+        {
+          signature,
+          blockhash: latestBlockhash.blockhash,
+          lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
+        },
+        commitment,
+      ),
+    "confirmTransaction",
   );
   if (confirmation.value.err) {
     throw new Error(`Transaction failed: ${JSON.stringify(confirmation.value.err)}`);
   }
   return signature;
+}
+
+async function fundIfNeeded(
+  connection: Connection,
+  payer: Keypair,
+  recipient: PublicKey,
+  minLamports: number,
+  commitment: Commitment,
+): Promise<void> {
+  const balance = await withRetry(
+    () => connection.getBalance(recipient),
+    "getBalance",
+  );
+  if (balance >= minLamports) {
+    return;
+  }
+  const ix = SystemProgram.transfer({
+    fromPubkey: payer.publicKey,
+    toPubkey: recipient,
+    lamports: minLamports - balance,
+  });
+  await sendAndConfirm(connection, [ix], [payer], commitment);
 }
 
 async function ensureAta(
@@ -141,8 +211,10 @@ async function main(): Promise<void> {
   const user2 = Keypair.generate();
 
   await airdropIfNeeded(connection, authority.publicKey, 2 * LAMPORTS_PER_SOL);
-  await airdropIfNeeded(connection, user1.publicKey, 1 * LAMPORTS_PER_SOL);
-  await airdropIfNeeded(connection, user2.publicKey, 1 * LAMPORTS_PER_SOL);
+  const minUserLamports =
+    process.env.DISABLE_AIRDROP === "1" ? 0 : LAMPORTS_PER_SOL / 5;
+  await fundIfNeeded(connection, authority, user1.publicKey, minUserLamports, commitment);
+  await fundIfNeeded(connection, authority, user2.publicKey, minUserLamports, commitment);
 
   const mintKeypair = Keypair.generate();
   const configPda = findConfigPda(mintKeypair.publicKey, programId)[0];
@@ -170,12 +242,35 @@ async function main(): Promise<void> {
     commitment,
   );
 
+  const user1Ata = await ensureAta(
+    connection,
+    authority,
+    mintKeypair.publicKey,
+    user1.publicKey,
+    commitment,
+  );
+  const user2Ata = await ensureAta(
+    connection,
+    authority,
+    mintKeypair.publicKey,
+    user2.publicKey,
+    commitment,
+  );
+  const authorityAta = await ensureAta(
+    connection,
+    authority,
+    mintKeypair.publicKey,
+    authority.publicKey,
+    commitment,
+  );
+
   const mintToUserIx = buildMintInstruction({
     minter: authority.publicKey,
     mint: mintKeypair.publicKey,
     recipient: user1.publicKey,
     amount: 2_000_000n,
     configPda,
+    recipientAta: user1Ata,
     programId,
   });
 
@@ -185,18 +280,22 @@ async function main(): Promise<void> {
     recipient: authority.publicKey,
     amount: 1_000_000n,
     configPda,
+    recipientAta: authorityAta,
     programId,
   });
 
   const mintTx = await sendAndConfirm(
     connection,
-    [mintToUserIx, mintToAuthorityIx],
+    [mintToUserIx],
     [authority],
     commitment,
   );
-
-  const user1Ata = await ensureAta(connection, authority, mintKeypair.publicKey, user1.publicKey, commitment);
-  const user2Ata = await ensureAta(connection, authority, mintKeypair.publicKey, user2.publicKey, commitment);
+  const mintAuthorityTx = await sendAndConfirm(
+    connection,
+    [mintToAuthorityIx],
+    [authority],
+    commitment,
+  );
 
   const transferIx = createTransferCheckedInstruction(
     user1Ata,
@@ -212,7 +311,7 @@ async function main(): Promise<void> {
   const transferTx = await sendAndConfirm(
     connection,
     [transferIx],
-    [user1],
+    [authority, user1],
     commitment,
   );
 
@@ -244,11 +343,6 @@ async function main(): Promise<void> {
     commitment,
   );
 
-  const authorityAta = getAssociatedTokenAddress(mintKeypair.publicKey, authority.publicKey, {
-    tokenProgramId: TOKEN_2022_PROGRAM_ID,
-    associatedTokenProgramId: ASSOCIATED_TOKEN_PROGRAM_ID,
-  });
-
   const burnIx = buildBurnInstruction({
     burner: authority.publicKey,
     mint: mintKeypair.publicKey,
@@ -275,6 +369,7 @@ async function main(): Promise<void> {
     signatures: {
       initialize: initializeTx,
       mint: mintTx,
+      mintAuthority: mintAuthorityTx,
       transfer: transferTx,
       freeze: freezeTx,
       thaw: thawTx,

@@ -92,8 +92,8 @@ export function getAssociatedTokenAddress(
     mint,
     owner,
     allowOwnerOffCurve,
-    associatedTokenProgramId,
     tokenProgramId,
+    associatedTokenProgramId,
   );
 }
 

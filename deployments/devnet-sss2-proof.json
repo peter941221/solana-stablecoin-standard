@@ -1,0 +1,21 @@
+{
+  "cluster": "devnet",
+  "programId": "5T8qkjgJVWcUVza36JVFq3GCiKwAXhunKc8NY2nNbtiZ",
+  "transferHookProgramId": "5gVGKwPB7qstEN5Kp8fJGCURGPGz2GQnYHQAtD1zKSLB",
+  "mint": "E2Ty2y2vMLWsoxEerpGUo2Rgu1goGoWfiGtFUzUpZpUH",
+  "configPda": "4ypiyKhhdJLuaVkyiPna248sU4omB9N6hv6anM77xFnq",
+  "authority": "4LmeKS6NTWxmd4g4TQmjydee4tnshghL5FSNamZeFSDs",
+  "user1": "H9HfZsW13MfkPVGHQDsayhDJqw3Vt5yp2PpcjorAiq46",
+  "user2": "GYshdFXNzp4JoouE7ZR152uBQDn8UXXJVn9YYz4tsCjS",
+  "signatures": {
+    "initialize": "3VDckxT5dVGH3SFGcZ28NAyKyeJHZp14AjtC4AoQMqzJu6uPeyhiWXnskDrvukZEsj5f7aFUE7G49MdSCTsqTuLa",
+    "mint": "3iYD3FCH24z2cyF1gviBeD6oygXK2mhjv9zAvbVy9L3hVQnf4KFQw1SkKF5fU2UY7CbdgkuDVCqT1gr7Y9VEv71Y",
+    "transfer": "4bCgiiykjWw1ReZufPRKN2c21oXHJF6ZGa5hyWxkXszZiD1EyAKZeXrafmCjyKob2BET2s7JSVGddyr1ReXpx9Fs",
+    "transferError": null,
+    "blacklist": "3hHu7ksxTMo1KhGGxjhohUsaMHv129xB6s2YrGy2TCh3XNh1fRztQApTm1EEpCJDvq2NUamFY1AWBx8GpP6rEYsg",
+    "blockedTransfer": "",
+    "blockedTransferError": "Error: sendRawTransaction failed after 5 attempts: Error: Simulation failed. \nMessage: Transaction simulation failed: Error processing Instruction 0: custom program error: 0x1770. \nLogs: \n[\n  \"Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb invoke [1]\",\n  \"Program log: Instruction: TransferChecked\",\n  \"Program 5gVGKwPB7qstEN5Kp8fJGCURGPGz2GQnYHQAtD1zKSLB invoke [2]\",\n  \"Program 5gVGKwPB7qstEN5Kp8fJGCURGPGz2GQnYHQAtD1zKSLB consumed 34246 of 168944 compute units\",\n  \"Program 5gVGKwPB7qstEN5Kp8fJGCURGPGz2GQnYHQAtD1zKSLB failed: custom program error: 0x1770\",\n  \"Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb consumed 65302 of 200000 compute units\",\n  \"Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb failed: custom program error: 0x1770\"\n]. \nCatch the `SendTransactionError` and call `getLogs()` on it for full details.",
+    "freeze": "5JNQJUok88Vet6TxcZ5yFRmXtRdaU1oB39PMyExt7LCNEKgm3zbKeNfakKM6uDtE5j8VVg3q8c7XjWnGRHNWZnbG",
+    "seize": "4XAAoQQTNQnAe6STVGKiGCbL8kRJPLeUW9tZ9fMddjicHxGVZHVimLHX33J8chqyLT58ncXzRP4zmoAgtTr15yNg"
+  }
+}

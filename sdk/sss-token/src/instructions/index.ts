@@ -181,9 +181,6 @@ export function buildInitializeInstruction(
     params.roleAccountPda ??
     findRoleAccountPda(configPda, params.authority, programId)[0];
 
-  const extraAccountMetasPda = params.extraAccountMetasPda ??
-    findExtraAccountMetasPda(params.mint, transferHookProgramId)[0];
-
   const keys: AccountMeta[] = [
     { pubkey: params.authority, isSigner: true, isWritable: true },
     { pubkey: params.mint, isSigner: true, isWritable: true },
@@ -191,18 +188,22 @@ export function buildInitializeInstruction(
     { pubkey: roleAccountPda, isSigner: false, isWritable: true },
   ];
 
-  if (enableTransferHook) {
-    keys.push({
-      pubkey: extraAccountMetasPda,
-      isSigner: false,
-      isWritable: true,
-    });
-    keys.push({
-      pubkey: transferHookProgramId,
-      isSigner: false,
-      isWritable: false,
-    });
-  }
+  const extraAccountMetasPda = enableTransferHook
+    ? params.extraAccountMetasPda ??
+      findExtraAccountMetasPda(params.mint, transferHookProgramId)[0]
+    : programId;
+  const transferHookProgramKey = enableTransferHook ? transferHookProgramId : programId;
+
+  keys.push({
+    pubkey: extraAccountMetasPda,
+    isSigner: false,
+    isWritable: enableTransferHook,
+  });
+  keys.push({
+    pubkey: transferHookProgramKey,
+    isSigner: false,
+    isWritable: false,
+  });
 
   keys.push({
     pubkey: params.token2022ProgramId ?? TOKEN_2022_PROGRAM_ID,
@@ -267,7 +268,7 @@ export function buildMintInstruction(params: MintInstructionParams): Transaction
     { pubkey: params.minter, isSigner: true, isWritable: true },
     { pubkey: configPda, isSigner: false, isWritable: true },
     { pubkey: roleAccountPda, isSigner: false, isWritable: true },
-    { pubkey: params.mint, isSigner: false, isWritable: false },
+    { pubkey: params.mint, isSigner: false, isWritable: true },
     { pubkey: params.recipient, isSigner: false, isWritable: false },
     { pubkey: recipientAta, isSigner: false, isWritable: true },
     { pubkey: token2022ProgramId, isSigner: false, isWritable: false },
@@ -597,6 +598,9 @@ export interface SeizeInstructionParams {
   treasuryAta: PublicKey;
   blacklistEntry: PublicKey;
   roleAccountPda?: PublicKey;
+  extraAccountMetasPda?: PublicKey;
+  destinationBlacklistEntry?: PublicKey;
+  transferHookProgramId?: PublicKey;
   token2022ProgramId?: PublicKey;
   programId?: PublicKey;
 }
@@ -608,6 +612,14 @@ export function buildSeizeInstruction(
   const roleAccountPda =
     params.roleAccountPda ??
     findRoleAccountPda(params.configPda, params.seizer, programId)[0];
+  const transferHookProgramId =
+    params.transferHookProgramId ?? TRANSFER_HOOK_PROGRAM_ID;
+  const extraAccountMetasPda =
+    params.extraAccountMetasPda ??
+    findExtraAccountMetasPda(params.mint, transferHookProgramId)[0];
+  const destinationBlacklistEntry =
+    params.destinationBlacklistEntry ??
+    findBlacklistEntryPda(params.configPda, params.seizer, programId)[0];
   const token2022ProgramId = params.token2022ProgramId ?? TOKEN_2022_PROGRAM_ID;
 
   const keys: AccountMeta[] = [
@@ -618,6 +630,10 @@ export function buildSeizeInstruction(
     { pubkey: params.targetAta, isSigner: false, isWritable: true },
     { pubkey: params.treasuryAta, isSigner: false, isWritable: true },
     { pubkey: params.blacklistEntry, isSigner: false, isWritable: false },
+    { pubkey: extraAccountMetasPda, isSigner: false, isWritable: false },
+    { pubkey: programId, isSigner: false, isWritable: false },
+    { pubkey: destinationBlacklistEntry, isSigner: false, isWritable: false },
+    { pubkey: transferHookProgramId, isSigner: false, isWritable: false },
     { pubkey: token2022ProgramId, isSigner: false, isWritable: false },
   ];
 

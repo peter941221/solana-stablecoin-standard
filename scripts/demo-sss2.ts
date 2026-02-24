@@ -5,6 +5,7 @@ import {
   Keypair,
   PublicKey,
   LAMPORTS_PER_SOL,
+  SystemProgram,
   Transaction,
 } from "@solana/web3.js";
 import {
@@ -12,6 +13,7 @@ import {
   createTransferCheckedWithTransferHookInstruction,
   ASSOCIATED_TOKEN_PROGRAM_ID,
   TOKEN_2022_PROGRAM_ID,
+  getAccount,
 } from "@solana/spl-token";
 
 import {
@@ -19,6 +21,7 @@ import {
   buildFreezeInstruction,
   buildInitializeInstruction,
   buildMintInstruction,
+  buildRemoveFromBlacklistInstruction,
   buildSeizeInstruction,
 } from "../sdk/sss-token/src/instructions";
 import {
@@ -50,24 +53,85 @@ function loadKeypair(path: string): Keypair {
   return Keypair.fromSecretKey(Uint8Array.from(raw));
 }
 
+function decodeBlacklistEntry(data: Buffer): {
+  config: PublicKey;
+  wallet: PublicKey;
+  isActive: boolean;
+  reason: string;
+} | null {
+  if (data.length < 8 + 32 + 32 + 8 + 32 + 4 + 2) {
+    return null;
+  }
+  let offset = 8;
+  const config = new PublicKey(data.subarray(offset, offset + 32));
+  offset += 32;
+  const wallet = new PublicKey(data.subarray(offset, offset + 32));
+  offset += 32;
+  offset += 8;
+  offset += 32;
+  const reasonLength = data.readUInt32LE(offset);
+  offset += 4;
+  const reason = data.subarray(offset, offset + reasonLength).toString("utf8");
+  offset += reasonLength;
+  const isActive = data.readUInt8(offset) === 1;
+  return { config, wallet, isActive, reason };
+}
+
+async function withRetry<T>(
+  action: () => Promise<T>,
+  label: string,
+  attempts = 5,
+  delayMs = 2000,
+): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      return await action();
+    } catch (error) {
+      lastError = error;
+      if (attempt === attempts) {
+        break;
+      }
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+  }
+  throw new Error(`${label} failed after ${attempts} attempts: ${String(lastError)}`);
+}
+
 async function airdropIfNeeded(
   connection: Connection,
   pubkey: PublicKey,
   minLamports: number,
 ): Promise<void> {
-  const balance = await connection.getBalance(pubkey);
+  if (process.env.DISABLE_AIRDROP === "1") {
+    return;
+  }
+  const balance = await withRetry(
+    () => connection.getBalance(pubkey),
+    "getBalance",
+  );
   if (balance >= minLamports) {
     return;
   }
-  const signature = await connection.requestAirdrop(pubkey, minLamports - balance);
-  const latestBlockhash = await connection.getLatestBlockhash("confirmed");
-  await connection.confirmTransaction(
-    {
-      signature,
-      blockhash: latestBlockhash.blockhash,
-      lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
-    },
-    "confirmed",
+  const signature = await withRetry(
+    () => connection.requestAirdrop(pubkey, minLamports - balance),
+    "requestAirdrop",
+  );
+  const latestBlockhash = await withRetry(
+    () => connection.getLatestBlockhash("confirmed"),
+    "getLatestBlockhash",
+  );
+  await withRetry(
+    () =>
+      connection.confirmTransaction(
+        {
+          signature,
+          blockhash: latestBlockhash.blockhash,
+          lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
+        },
+        "confirmed",
+      ),
+    "confirmTransaction",
   );
 }
 
@@ -78,32 +142,71 @@ async function sendAndConfirm(
   commitment: Commitment,
   allowFailure = false,
 ): Promise<{ signature: string; error: string | null }> {
-  const latestBlockhash = await connection.getLatestBlockhash(commitment);
-  const tx = new Transaction({
-    feePayer: signers[0].publicKey,
-    blockhash: latestBlockhash.blockhash,
-    lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
-  });
-  for (const instruction of instructions) {
-    tx.add(instruction);
-  }
-  tx.sign(...signers);
-  const signature = await connection.sendRawTransaction(tx.serialize());
-  const confirmation = await connection.confirmTransaction(
-    {
-      signature,
+  try {
+    const latestBlockhash = await withRetry(
+      () => connection.getLatestBlockhash(commitment),
+      "getLatestBlockhash",
+    );
+    const tx = new Transaction({
+      feePayer: signers[0].publicKey,
       blockhash: latestBlockhash.blockhash,
       lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
-    },
-    commitment,
-  );
-  const err = confirmation.value.err
-    ? JSON.stringify(confirmation.value.err)
-    : null;
-  if (err && !allowFailure) {
-    throw new Error(`Transaction failed: ${err}`);
+    });
+    for (const instruction of instructions) {
+      tx.add(instruction);
+    }
+    tx.sign(...signers);
+    const signature = await withRetry(
+      () => connection.sendRawTransaction(tx.serialize()),
+      "sendRawTransaction",
+    );
+    const confirmation = await withRetry(
+      () =>
+        connection.confirmTransaction(
+          {
+            signature,
+            blockhash: latestBlockhash.blockhash,
+            lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
+          },
+          commitment,
+        ),
+      "confirmTransaction",
+    );
+    const err = confirmation.value.err
+      ? JSON.stringify(confirmation.value.err)
+      : null;
+    if (err && !allowFailure) {
+      throw new Error(`Transaction failed: ${err}`);
+    }
+    return { signature, error: err };
+  } catch (error) {
+    if (allowFailure) {
+      return { signature: "", error: String(error) };
+    }
+    throw error;
   }
-  return { signature, error: err };
+}
+
+async function fundIfNeeded(
+  connection: Connection,
+  payer: Keypair,
+  recipient: PublicKey,
+  minLamports: number,
+  commitment: Commitment,
+): Promise<void> {
+  const balance = await withRetry(
+    () => connection.getBalance(recipient),
+    "getBalance",
+  );
+  if (balance >= minLamports) {
+    return;
+  }
+  const ix = SystemProgram.transfer({
+    fromPubkey: payer.publicKey,
+    toPubkey: recipient,
+    lamports: minLamports - balance,
+  });
+  await sendAndConfirm(connection, [ix], [payer], commitment);
 }
 
 async function ensureAta(
@@ -147,8 +250,10 @@ async function main(): Promise<void> {
   const user2 = Keypair.generate();
 
   await airdropIfNeeded(connection, authority.publicKey, 2 * LAMPORTS_PER_SOL);
-  await airdropIfNeeded(connection, user1.publicKey, 1 * LAMPORTS_PER_SOL);
-  await airdropIfNeeded(connection, user2.publicKey, 1 * LAMPORTS_PER_SOL);
+  const minUserLamports =
+    process.env.DISABLE_AIRDROP === "1" ? 0 : LAMPORTS_PER_SOL / 5;
+  await fundIfNeeded(connection, authority, user1.publicKey, minUserLamports, commitment);
+  await fundIfNeeded(connection, authority, user2.publicKey, minUserLamports, commitment);
 
   const mintKeypair = Keypair.generate();
   const configPda = findConfigPda(mintKeypair.publicKey, programId)[0];
@@ -177,12 +282,35 @@ async function main(): Promise<void> {
     commitment,
   );
 
+  const user1Ata = await ensureAta(
+    connection,
+    authority,
+    mintKeypair.publicKey,
+    user1.publicKey,
+    commitment,
+  );
+  const user2Ata = await ensureAta(
+    connection,
+    authority,
+    mintKeypair.publicKey,
+    user2.publicKey,
+    commitment,
+  );
+  const treasuryAta = await ensureAta(
+    connection,
+    authority,
+    mintKeypair.publicKey,
+    authority.publicKey,
+    commitment,
+  );
+
   const mintIx = buildMintInstruction({
     minter: authority.publicKey,
     mint: mintKeypair.publicKey,
     recipient: user1.publicKey,
     amount: 2_000_000n,
     configPda,
+    recipientAta: user1Ata,
     programId,
   });
 
@@ -193,28 +321,150 @@ async function main(): Promise<void> {
     commitment,
   );
 
-  const user1Ata = await ensureAta(connection, authority, mintKeypair.publicKey, user1.publicKey, commitment);
-  const user2Ata = await ensureAta(connection, authority, mintKeypair.publicKey, user2.publicKey, commitment);
-  const treasuryAta = await ensureAta(connection, authority, mintKeypair.publicKey, authority.publicKey, commitment);
-
-  const transferIx = await createTransferCheckedWithTransferHookInstruction(
+  const bootstrapUser1BlacklistIx = buildAddToBlacklistInstruction({
+    blacklister: authority.publicKey,
+    configPda,
+    wallet: user1.publicKey,
+    reason: "bootstrap",
+    blacklistEntryPda: findBlacklistEntryPda(configPda, user1.publicKey, programId)[0],
+    roleAccountPda: rolePda,
+    programId,
+  });
+  const bootstrapUser1UnblockIx = buildRemoveFromBlacklistInstruction({
+    blacklister: authority.publicKey,
+    configPda,
+    blacklistEntryPda: findBlacklistEntryPda(configPda, user1.publicKey, programId)[0],
+    roleAccountPda: rolePda,
+    programId,
+  });
+  await sendAndConfirm(
     connection,
-    user1Ata,
-    mintKeypair.publicKey,
-    user2Ata,
-    user1.publicKey,
-    500_000n,
-    6,
-    [],
+    [bootstrapUser1BlacklistIx, bootstrapUser1UnblockIx],
+    [authority],
     commitment,
-    TOKEN_2022_PROGRAM_ID,
+  );
+
+  const bootstrapUser2BlacklistIx = buildAddToBlacklistInstruction({
+    blacklister: authority.publicKey,
+    configPda,
+    wallet: user2.publicKey,
+    reason: "bootstrap",
+    blacklistEntryPda: findBlacklistEntryPda(configPda, user2.publicKey, programId)[0],
+    roleAccountPda: rolePda,
+    programId,
+  });
+  const bootstrapUser2UnblockIx = buildRemoveFromBlacklistInstruction({
+    blacklister: authority.publicKey,
+    configPda,
+    blacklistEntryPda: findBlacklistEntryPda(configPda, user2.publicKey, programId)[0],
+    roleAccountPda: rolePda,
+    programId,
+  });
+  await sendAndConfirm(
+    connection,
+    [bootstrapUser2BlacklistIx, bootstrapUser2UnblockIx],
+    [authority],
+    commitment,
+  );
+
+  const authorityBlacklistEntryPda = findBlacklistEntryPda(
+    configPda,
+    authority.publicKey,
+    programId,
+  )[0];
+  const bootstrapAuthorityBlacklistIx = buildAddToBlacklistInstruction({
+    blacklister: authority.publicKey,
+    configPda,
+    wallet: authority.publicKey,
+    reason: "bootstrap",
+    blacklistEntryPda: authorityBlacklistEntryPda,
+    roleAccountPda: rolePda,
+    programId,
+  });
+  const bootstrapAuthorityUnblockIx = buildRemoveFromBlacklistInstruction({
+    blacklister: authority.publicKey,
+    configPda,
+    blacklistEntryPda: authorityBlacklistEntryPda,
+    roleAccountPda: rolePda,
+    programId,
+  });
+  await sendAndConfirm(
+    connection,
+    [bootstrapAuthorityBlacklistIx, bootstrapAuthorityUnblockIx],
+    [authority],
+    commitment,
+  );
+
+  const sourceBlacklistEntryPda = findBlacklistEntryPda(
+    configPda,
+    user1.publicKey,
+    programId,
+  )[0];
+  const destinationBlacklistEntryPda = findBlacklistEntryPda(
+    configPda,
+    user2.publicKey,
+    programId,
+  )[0];
+  if (process.env.DEBUG_BLACKLIST === "1") {
+    const user1Account = await withRetry(
+      () => getAccount(connection, user1Ata, commitment, TOKEN_2022_PROGRAM_ID),
+      "getAccount",
+    );
+    const user2Account = await withRetry(
+      () => getAccount(connection, user2Ata, commitment, TOKEN_2022_PROGRAM_ID),
+      "getAccount",
+    );
+    const [sourceInfo, destinationInfo] = await Promise.all([
+      withRetry(
+        () => connection.getAccountInfo(sourceBlacklistEntryPda, commitment),
+        "getAccountInfo",
+      ),
+      withRetry(
+        () => connection.getAccountInfo(destinationBlacklistEntryPda, commitment),
+        "getAccountInfo",
+      ),
+    ]);
+    console.log(
+      JSON.stringify(
+        {
+          user1Owner: user1Account.owner.toBase58(),
+          user2Owner: user2Account.owner.toBase58(),
+          sourceBlacklist: sourceInfo
+            ? decodeBlacklistEntry(sourceInfo.data)
+            : null,
+          destinationBlacklist: destinationInfo
+            ? decodeBlacklistEntry(destinationInfo.data)
+            : null,
+        },
+        null,
+        2,
+      ),
+    );
+  }
+
+  const transferIx = await withRetry(
+    () =>
+      createTransferCheckedWithTransferHookInstruction(
+        connection,
+        user1Ata,
+        mintKeypair.publicKey,
+        user2Ata,
+        user1.publicKey,
+        500_000n,
+        6,
+        [],
+        commitment,
+        TOKEN_2022_PROGRAM_ID,
+      ),
+    "buildTransferHookInstruction",
   );
 
   const transferTx = await sendAndConfirm(
     connection,
     [transferIx],
-    [user1],
+    [authority, user1],
     commitment,
+    true,
   );
 
   const blacklistEntryPda = findBlacklistEntryPda(configPda, user1.publicKey, programId)[0];
@@ -234,23 +484,27 @@ async function main(): Promise<void> {
     commitment,
   );
 
-  const blockedTransferIx = await createTransferCheckedWithTransferHookInstruction(
-    connection,
-    user1Ata,
-    mintKeypair.publicKey,
-    user2Ata,
-    user1.publicKey,
-    100_000n,
-    6,
-    [],
-    commitment,
-    TOKEN_2022_PROGRAM_ID,
+  const blockedTransferIx = await withRetry(
+    () =>
+      createTransferCheckedWithTransferHookInstruction(
+        connection,
+        user1Ata,
+        mintKeypair.publicKey,
+        user2Ata,
+        user1.publicKey,
+        100_000n,
+        6,
+        [],
+        commitment,
+        TOKEN_2022_PROGRAM_ID,
+      ),
+    "buildTransferHookInstruction",
   );
 
   const blockedTransfer = await sendAndConfirm(
     connection,
     [blockedTransferIx],
-    [user1],
+    [authority, user1],
     commitment,
     true,
   );
@@ -276,6 +530,8 @@ async function main(): Promise<void> {
     targetAta: user1Ata,
     treasuryAta,
     blacklistEntry: blacklistEntryPda,
+    destinationBlacklistEntry: authorityBlacklistEntryPda,
+    transferHookProgramId,
     programId,
   });
   const seizeTx = await sendAndConfirm(
@@ -298,6 +554,7 @@ async function main(): Promise<void> {
       initialize: initializeTx.signature,
       mint: mintTx.signature,
       transfer: transferTx.signature,
+      transferError: transferTx.error,
       blacklist: blacklistTx.signature,
       blockedTransfer: blockedTransfer.signature,
       blockedTransferError: blockedTransfer.error,

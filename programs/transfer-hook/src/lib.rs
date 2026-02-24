@@ -208,8 +208,14 @@ fn execute_handler(
 
     let is_core_authority = accounts.source_owner.key == accounts.stablecoin_config.key;
     if !is_core_authority {
-        check_blacklist(accounts.source_blacklist_entry)?;
-        check_blacklist(accounts.destination_blacklist_entry)?;
+        check_blacklist(
+            accounts.source_blacklist_entry,
+            accounts.stablecoin_config.key,
+        )?;
+        check_blacklist(
+            accounts.destination_blacklist_entry,
+            accounts.stablecoin_config.key,
+        )?;
     }
 
     Ok(())
@@ -340,7 +346,7 @@ fn deserialize_config(account: &AccountInfo) -> Result<state::StablecoinConfig> 
     state::StablecoinConfig::try_deserialize(&mut slice)
 }
 
-fn check_blacklist(account: &AccountInfo) -> Result<()> {
+fn check_blacklist(account: &AccountInfo, expected_config: &Pubkey) -> Result<()> {
     if account.data_is_empty() {
         return Ok(());
     }
@@ -348,6 +354,9 @@ fn check_blacklist(account: &AccountInfo) -> Result<()> {
     let data = account.data.borrow();
     let mut slice: &[u8] = &data;
     let entry = state::BlacklistEntry::try_deserialize(&mut slice)?;
+    if entry.config != *expected_config {
+        return Ok(());
+    }
     if entry.is_active {
         return err!(errors::TransferHookError::TransferDenied);
     }

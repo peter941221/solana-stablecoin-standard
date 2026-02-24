@@ -148,3 +148,34 @@ Progress:
 - Anchor tests re-run in WSL with no warnings.
 - CI workflow updated with caching and concurrency guard.
 - Deployment runbook linked from docs/DEPLOYMENT.md.
+
+Progress:
+- Devnet deploy blocked by airdrop rate limit; wallet balance is 0 SOL.
+
+Progress:
+- Devnet deploy attempted; insufficient SOL and airdrop rate limited.
+
+Progress:
+- Devnet deploy (solana program deploy --use-rpc): stablecoin_core succeeded, transfer_hook failed due to insufficient funds.
+
+Progress:
+- Devnet: transfer_hook upgraded; stablecoin_core already deployed.
+- SSS-1 devnet demo succeeded and wrote deployments/devnet-sss1-proof.json.
+- SSS-2 devnet demo blocked by transfer hook TransferDenied; authority SOL drained to 0.0013.
+
+Progress:
+- Restored project memory context for current session (user request).
+
+Date: 2026-02-24
+
+Progress:
+- Tried running devnet SSS-2 demo with devnet program IDs and DISABLE_AIRDROP=1; failed because keypair file C:\Users\peter\.config\solana\id.json not found.
+- solana config get shows config path C:\Users\peter\.config\solana\cli\config.yml, but the directory does not exist; need actual keypair path.
+- User provided devnet wallet address 4LmeKS6NTWxmd4g4TQmjydee4tnshghL5FSNamZeFSDs; still need matching keypair file path to sign SSS-2 demo.
+- Located the matching keypair in WSL at ~/.config/solana/id.json (pubkey 4LmeKS6...).
+- Copied WSL keypair to C:\Users\peter\.config\solana\id.json with backup of the newer file.
+- Devnet balance confirmed ~10 SOL for authority keypair.
+- SSS-2 devnet demo succeeded; wrote deployments/devnet-sss2-proof.json.
+- Filled deployments/devnet.json with devnet IDs, mint, config PDA, initialize tx, and timestamp.
+- Updated README with devnet proofs and tx signatures.
+- Added docs/HACKATHON-DELIVERABLES.md checklist for submission.
