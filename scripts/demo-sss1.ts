@@ -231,6 +231,7 @@ async function main(): Promise<void> {
   const rpcUrl = process.env.SOLANA_RPC_URL ?? DEFAULT_RPC_URL;
   const commitment = (process.env.SOLANA_COMMITMENT ?? "confirmed") as Commitment;
   const programId = new PublicKey(requireEnv("SSS_CORE_PROGRAM_ID"));
+  const proofTag = process.env.PROOF_TAG;
 
   const authorityPath = resolveKeypairPath();
   const authority = loadKeypair(authorityPath);
@@ -390,6 +391,7 @@ async function main(): Promise<void> {
 
   const proof = {
     cluster: "devnet",
+    proofTag,
     programId: programId.toBase58(),
     mint: mintKeypair.publicKey.toBase58(),
     configPda: configPda.toBase58(),

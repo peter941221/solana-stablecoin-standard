@@ -47,6 +47,10 @@ PowerShell dry run:
 
 pwsh scripts/verify-devnet.ps1 -DryRun
 
+PowerShell with proof tag:
+
+pwsh scripts/verify-devnet.ps1 -ProofTag demo-2026-02-24
+
 Bash:
 
 bash scripts/verify-devnet.sh
@@ -54,6 +58,10 @@ bash scripts/verify-devnet.sh
 Bash dry run:
 
 bash scripts/verify-devnet.sh --dry-run
+
+Bash with proof tag:
+
+bash scripts/verify-devnet.sh --proof-tag demo-2026-02-24
 
 Manual:
 

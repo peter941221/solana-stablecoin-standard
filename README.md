@@ -52,6 +52,8 @@ This repo delivers a modular SDK with opinionated presets:
 
 - Bash dry run: bash scripts/verify-devnet.sh --dry-run
 
+Note: verification scripts generate new devnet proofs on each run.
+
 ## Repo Structure
 
 ```

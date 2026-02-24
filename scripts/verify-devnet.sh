@@ -2,17 +2,30 @@
 set -euo pipefail
 
 usage() {
-  echo "Usage: $0 [--dry-run]"
+  echo "Usage: $0 [--dry-run] [--proof-tag TAG]"
 }
 
 DRY_RUN=0
-if [[ "${1:-}" == "--dry-run" ]]; then
-  DRY_RUN=1
-  shift
-elif [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
-  usage
-  exit 0
-fi
+PROOF_TAG="${PROOF_TAG:-}"
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --dry-run)
+      DRY_RUN=1
+      shift
+      ;;
+    --proof-tag)
+      PROOF_TAG="${2:-}"
+      shift 2
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      shift
+      ;;
+  esac
+done
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 project_root="$(cd "$script_dir/.." && pwd)"
@@ -87,6 +100,9 @@ export SOLANA_COMMITMENT="${SOLANA_COMMITMENT:-confirmed}"
 export NODE_OPTIONS="${NODE_OPTIONS:---dns-result-order=ipv4first}"
 export DISABLE_AIRDROP="1"
 export AUTHORITY_KEYPAIR_PATH="$keypair_path"
+if [[ -n "$PROOF_TAG" ]]; then
+  export PROOF_TAG="$PROOF_TAG"
+fi
 
 echo "Using keypair: $keypair_path"
 solana-keygen pubkey "$keypair_path"
@@ -96,8 +112,26 @@ if [[ "$DRY_RUN" -eq 1 ]]; then
   exit 0
 fi
 
+print_summary() {
+  local sss1_proof="$project_root/deployments/devnet-sss1-proof.json"
+  local sss2_proof="$project_root/deployments/devnet-sss2-proof.json"
+  if [[ -f "$sss1_proof" ]]; then
+    local sss1_init
+    sss1_init=$(node -e "const fs=require('fs');const data=JSON.parse(fs.readFileSync(process.argv[1],'utf8'));console.log(data.signatures?.initialize ?? '');" "$sss1_proof")
+    echo "SSS-1 initialize: $sss1_init"
+  fi
+  if [[ -f "$sss2_proof" ]]; then
+    local sss2_init
+    sss2_init=$(node -e "const fs=require('fs');const data=JSON.parse(fs.readFileSync(process.argv[1],'utf8'));console.log(data.signatures?.initialize ?? '');" "$sss2_proof")
+    echo "SSS-2 initialize: $sss2_init"
+  fi
+}
+
 export PROOF_PATH="$project_root/deployments/devnet-sss1-proof.json"
 npx tsx "$project_root/scripts/demo-sss1.ts"
 
 export PROOF_PATH="$project_root/deployments/devnet-sss2-proof.json"
 npx tsx "$project_root/scripts/demo-sss2.ts"
+
+echo "Proofs refreshed (new signatures are expected on each run)."
+print_summary

@@ -1,6 +1,7 @@
 param(
   [string]$KeypairPath = $env:AUTHORITY_KEYPAIR_PATH,
-  [switch]$DryRun
+  [switch]$DryRun,
+  [string]$ProofTag = $env:PROOF_TAG
 )
 
 $ErrorActionPreference = "Stop"
@@ -74,6 +75,9 @@ if (-not $env:NODE_OPTIONS) {
 }
 $env:DISABLE_AIRDROP = "1"
 $env:AUTHORITY_KEYPAIR_PATH = $keypairPath
+if ($ProofTag) {
+  $env:PROOF_TAG = $ProofTag
+}
 
 Write-Host "Using keypair: $keypairPath"
 & solana-keygen pubkey $keypairPath

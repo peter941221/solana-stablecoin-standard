@@ -270,6 +270,7 @@ async function main(): Promise<void> {
   const commitment = (process.env.SOLANA_COMMITMENT ?? "confirmed") as Commitment;
   const programId = new PublicKey(requireEnv("SSS_CORE_PROGRAM_ID"));
   const transferHookProgramId = new PublicKey(requireEnv("SSS_TRANSFER_HOOK_PROGRAM_ID"));
+  const proofTag = process.env.PROOF_TAG;
 
   const authorityPath = resolveKeypairPath();
   const authority = loadKeypair(authorityPath);
@@ -573,6 +574,7 @@ async function main(): Promise<void> {
 
   const proof = {
     cluster: "devnet",
+    proofTag,
     programId: programId.toBase58(),
     transferHookProgramId: transferHookProgramId.toBase58(),
     mint: mintKeypair.publicKey.toBase58(),

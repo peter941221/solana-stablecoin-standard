@@ -192,3 +192,5 @@ Progress:
 - Updated docs/HACKATHON-DELIVERABLES.md proof highlights to latest signatures.
 - Added scripts/verify-devnet.sh and referenced it in README and submission docs.
 - Ran scripts/verify-devnet.sh and refreshed devnet proofs, devnet.json, and README signatures.
+- Added proof tagging via PROOF_TAG in demo scripts and verification scripts.
+- Added verify script summary output and README note about regenerating proofs.
