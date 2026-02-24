@@ -1,18 +1,18 @@
 {
   "cluster": "devnet",
   "programId": "5T8qkjgJVWcUVza36JVFq3GCiKwAXhunKc8NY2nNbtiZ",
-  "mint": "DGHnrKmAh7AJrs6aMCSnrGe7P3BshursHKgLbNhFhUwH",
-  "configPda": "A2aVbsWHeYDC1N2WMceFtPA5mU5drzQshTj7rjFTGV14",
+  "mint": "EX5KYJsMm1PVxG2t6JCcZXFih9sviuzemFPxGtkNww9W",
+  "configPda": "7ant7xTjemDxAiyZF69zauqy88raB8LtdvwFYYGq7TSa",
   "authority": "4LmeKS6NTWxmd4g4TQmjydee4tnshghL5FSNamZeFSDs",
-  "user1": "31zGcc5UecXLskuBQuQ82UR3DxcoxHiNQ2wFeoWLfCBi",
-  "user2": "EbVKSQdMH5oHdMthitiYpKz7SKPEqfUX1nbd5UsDmNVM",
+  "user1": "3XgK7S32Ji1iKkUdAgNT4fM3ncHQDabWQ618bEpyL55T",
+  "user2": "DvNzHEzH6SKJbfRAJ5aGXwAA6efeefanw1dmfW2PMHge",
   "signatures": {
-    "initialize": "qWxMWUiZcoqdTefgYY6DbuHx6vDqusFGR2yTaQYGpzxNsKjCuTpidgeTSpC5fSahcB3C86aGbKBmy1gAreCQTnE",
-    "mint": "24s4Ygzqq4RMQ5KTb72tfTFaHaadYs29zjJ7ymr4whj1JavTSVruCQGyJci4EwNWFpqxXW5N7oss4QU29rNbnGBU",
-    "mintAuthority": "4MLAEmA2gjTR2cT3jf9g7pFRAbHp3otbEygaPmfGnSAmbXJaKWwomCFzxg8rCWSAUY5NBPZchYegd2x4jWGZgCHi",
-    "transfer": "5M2LMJERhrPKsMkYqZ1dddjGndeuiBzXJMemcTM9CVxrxaFETXFzuKqxRULC5wmfaEsaJyKwVGS4oUpSxaEARNua",
-    "freeze": "5NkLBSFC1w9dWrbzSokZVGKScwQYumzkJDCQuNWxnLUfSfD7wVqWtjXg3EsBp5pNkE1g38qoS111Gf6JzJXnmA7r",
-    "thaw": "5nubJuveUjXieEPDokU6eJB4AZ1muKGu7yLJvANw4n7uR3RYJqf9VC9TCJWryJt14SoPe4LHZ7X7Y71AXEJpCifg",
-    "burn": "62fHXTRsyH6UTvmpQVJRLJ8jSU18TAnYu71UQjoWVqMuMhTWrV11kumPKPiNM1qHni7mtGLHKHdhmzaU15abESpM"
+    "initialize": "4puS9TrAM2YgHUkxsap4ioqFyRhEyHTJMVPNP6ghLYAzk6tDvA5ToSV8URsHDtMPGoGguGzkw2yGyfnZ6ukUNRiD",
+    "mint": "WyitAnSyjPYQ6UKoXLFG2e5QaDAzWjBQVuTQT4heUHCnSxqAETsf7oHFGNCEqTj17vsC6ABJzLGWXzy9aKZLMHT",
+    "mintAuthority": "iBWMAdKyK3X5vXN1TuqcwZn19AA8ZqpRtTMFVTkv4teCxRmJ2AJMT6gzdsnNhy1dmordQkfLqz9dW9ks1pfCxDT",
+    "transfer": "5LxXTYNWEtPJZBWqkkWtqJNU8FRXAdtmFa7wWBHk6uBs2Bcrb6QkCZiGbWmSVCiQb9L2tpvAXRKXD1dxdqA1QiTi",
+    "freeze": "5Cg6WNo2R8RaSnRHRE3EmAjPjawVdwUp3hXzuw3mHUWSHnyTKjEaut9Cf8f27vCVEvfeAKTmZYrxfERVgsZBT9Pu",
+    "thaw": "5HwipFVRDnTq8jsBrajYWdwjSGCaeQcCCi4yNvVCW5CmTLUbVY8hdeCPJG7n7GvxZETt48TYCczFJY1aCbVUxTMF",
+    "burn": "7ghrxSrEswfd9QCX2Hj71rF78FoXhY3jXHQix7WVEppPAiQjsibt6HTaBngMUKx3rzcde2yniewgz1UAwtde2TT"
   }
 }
