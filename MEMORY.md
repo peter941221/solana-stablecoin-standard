@@ -186,3 +186,4 @@ Progress:
 - Added scripts/verify-devnet.ps1 to resolve keypair paths and re-run devnet demos.
 - Added docs/HACKATHON-SUBMISSION-TEMPLATE.md and updated README with verification/script links.
 - Demo scripts now read Solana CLI config for keypair fallback.
+- Added DryRun mode to scripts/verify-devnet.ps1 and executed it to verify keypair path.

@@ -46,6 +46,8 @@ This repo delivers a modular SDK with opinionated presets:
 
 - PowerShell: scripts/verify-devnet.ps1
 
+- PowerShell dry run: pwsh scripts/verify-devnet.ps1 -DryRun
+
 ## Repo Structure
 
 ```

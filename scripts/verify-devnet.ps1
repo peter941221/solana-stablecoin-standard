@@ -1,5 +1,6 @@
 param(
-  [string]$KeypairPath = $env:AUTHORITY_KEYPAIR_PATH
+  [string]$KeypairPath = $env:AUTHORITY_KEYPAIR_PATH,
+  [switch]$DryRun
 )
 
 $ErrorActionPreference = "Stop"
@@ -76,6 +77,11 @@ $env:AUTHORITY_KEYPAIR_PATH = $keypairPath
 
 Write-Host "Using keypair: $keypairPath"
 & solana-keygen pubkey $keypairPath
+
+if ($DryRun) {
+  Write-Host "DryRun enabled. Skipping demo scripts."
+  exit 0
+}
 
 $env:PROOF_PATH = Join-Path $projectRoot "deployments\devnet-sss1-proof.json"
 & npx tsx (Join-Path $projectRoot "scripts\demo-sss1.ts")
